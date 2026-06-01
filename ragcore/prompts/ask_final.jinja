@@ -1,0 +1,9 @@
+Synthesize a single, well-structured answer to the user's question from the
+partial answers below. Cite sources inline as [source:id] where relevant.
+
+Question: {{ question }}
+
+Partial answers:
+{% for a in answers %}
+- {{ a }}
+{% endfor %}

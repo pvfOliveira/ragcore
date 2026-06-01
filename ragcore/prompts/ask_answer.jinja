@@ -1,0 +1,9 @@
+Using ONLY the context chunks below, answer the sub-question. If the context does
+not contain the answer, say "No relevant information found."
+
+Sub-question: {{ term }}
+
+Context:
+{% for c in chunks %}
+[chunk {{ loop.index }} | {{ c.source }}] {{ c.content }}
+{% endfor %}
