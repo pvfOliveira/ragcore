@@ -1,0 +1,24 @@
+[models.chat]
+local_provider = "ollama"
+local_model = "qwen3:8b"
+cloud_provider = "anthropic"
+cloud_model = "claude-sonnet-4-6"
+
+[models.embedding]
+local_provider = "ollama"
+local_model = "nomic-embed-text"
+
+[routing]
+escalate_over_tokens = 100000
+
+[chunking]
+chunk_size = 400
+chunk_overlap = 60
+min_chunk_size = 5
+
+[surreal]
+url = "ws://localhost:8000/rpc"
+namespace = "ragcore"
+database = "ragcore"
+user = "root"
+password = "root"
