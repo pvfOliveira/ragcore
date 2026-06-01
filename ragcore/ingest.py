@@ -33,6 +33,8 @@ async def ingest_source(
         title=extracted["title"], full_text=content, origin=extracted["origin"],
     )
     chunks = chunk_text(content, chunk_size=chunk_size, file_path=path_or_url)
+    if not chunks:
+        raise ValueError(f"Content from {path_or_url} produced no chunks to embed")
     vectors = await generate_embeddings(chunks, config)
     rows = [
         {"order": i, "content": c, "embedding": v}
