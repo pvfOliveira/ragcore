@@ -1,0 +1,36 @@
+[project]
+name = "ragcore"
+version = "0.1.0"
+description = "Local-first RAG core (hybrid of open-notebook's libraries)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "esperanto>=2.20.0,<3",
+    "content-core>=1.14.1,<2",
+    "ai-prompter>=0.4,<1",
+    "surrealdb>=1.0.4",
+    "langgraph>=1.0.5",
+    "langchain-core>=0.3",
+    "typer>=0.12",
+    "numpy>=1.26",
+    "tiktoken>=0.7",
+    "loguru>=0.7",
+    "pydantic>=2.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5"]
+
+[project.scripts]
+ragcore = "ragcore.cli:app"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
