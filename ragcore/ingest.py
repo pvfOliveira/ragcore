@@ -9,7 +9,13 @@ from ragcore.embedding import generate_embeddings
 
 async def _extract(path_or_url: str) -> dict:
     """Extract content to markdown via content-core. Returns title/content/origin."""
-    state = await extract_content({"source": path_or_url, "output_format": "markdown"})
+    is_url = path_or_url.startswith("http://") or path_or_url.startswith("https://")
+    request: dict = {"output_format": "markdown"}
+    if is_url:
+        request["url"] = path_or_url
+    else:
+        request["file_path"] = path_or_url
+    state = await extract_content(request)
     content = getattr(state, "content", "") or ""
     title = getattr(state, "title", None) or path_or_url
     return {"title": title, "content": content, "origin": path_or_url}
