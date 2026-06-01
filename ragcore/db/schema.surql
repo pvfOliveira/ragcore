@@ -20,9 +20,9 @@ DEFINE ANALYZER IF NOT EXISTS ragcore_analyzer
     FILTERS snowball(english), lowercase;
 
 DEFINE INDEX IF NOT EXISTS idx_source_full_text ON TABLE source
-    COLUMNS full_text SEARCH ANALYZER ragcore_analyzer BM25 HIGHLIGHTS;
+    COLUMNS full_text FULLTEXT ANALYZER ragcore_analyzer BM25 HIGHLIGHTS;
 DEFINE INDEX IF NOT EXISTS idx_source_emb_content ON TABLE source_embedding
-    COLUMNS content SEARCH ANALYZER ragcore_analyzer BM25 HIGHLIGHTS;
+    COLUMNS content FULLTEXT ANALYZER ragcore_analyzer BM25 HIGHLIGHTS;
 
 -- Full-text search over chunk content; returns chunk rows with BM25 relevance.
 DEFINE FUNCTION IF NOT EXISTS fn::text_search($q: string, $k: int) {
