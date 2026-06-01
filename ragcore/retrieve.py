@@ -24,3 +24,15 @@ def reciprocal_rank_fusion(
         merged["score"] = score
         fused.append(merged)
     return fused
+
+
+async def hybrid_search(store, embedder_fn, query: str, k: int = 10):
+    """Run vector + full-text search and fuse with RRF.
+
+    `embedder_fn(query) -> list[float]` produces the query embedding.
+    `store` exposes async vector_search / text_search.
+    """
+    query_vec = await embedder_fn(query)
+    vres = await store.vector_search(query_vec, k=k)
+    tres = await store.text_search(query, k=k)
+    return reciprocal_rank_fusion([vres, tres], key="id", k=60)[:k]
