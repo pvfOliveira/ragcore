@@ -47,6 +47,9 @@ async def test_extract_routes_path_to_file_path_field(monkeypatch):
 
 
 class _FakeStore:
+    async def find_source_id_by_origin(self, origin):
+        return None
+
     async def create_source(self, title, full_text, origin):
         return "source:x"
 

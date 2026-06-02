@@ -1,10 +1,18 @@
 """Synchronous ingestion: extract -> chunk -> embed -> store."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from content_core import extract_content
 
 from ragcore.chunking import chunk_text
 from ragcore.embedding import generate_embeddings
+
+
+@dataclass
+class IngestResult:
+    source_id: str
+    created: bool  # False => skipped because this origin was already ingested
 
 
 async def _extract(path_or_url: str) -> dict:
@@ -23,12 +31,14 @@ async def _extract(path_or_url: str) -> dict:
 
 async def ingest_source(
     path_or_url: str, store, config, chunk_size: int = 400
-) -> str:
+) -> IngestResult:
+    existing = await store.find_source_id_by_origin(path_or_url)
+    if existing:
+        return IngestResult(source_id=existing, created=False)
     extracted = await _extract(path_or_url)
     content = extracted["content"]
     if not content.strip():
         raise ValueError(f"No content extracted from {path_or_url}")
-
     source_id = await store.create_source(
         title=extracted["title"], full_text=content, origin=extracted["origin"],
     )
@@ -41,4 +51,4 @@ async def ingest_source(
         for i, (c, v) in enumerate(zip(chunks, vectors))
     ]
     await store.add_embeddings(source_id, rows)
-    return source_id
+    return IngestResult(source_id=source_id, created=True)

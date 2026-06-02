@@ -56,11 +56,47 @@ def init():
 
 @app.command()
 def ingest(source: str):
-    """Ingest a file path or URL."""
+    """Ingest a file path or URL (skips if the same origin was already ingested)."""
     try:
         cfg, store = _load()
-        sid = asyncio.run(ingest_source(source, store, cfg, chunk_size=cfg.chunking.chunk_size))
-        typer.echo(f"Ingested {source} as {sid}")
+        result = asyncio.run(ingest_source(source, store, cfg, chunk_size=cfg.chunking.chunk_size))
+        if result.created:
+            typer.echo(f"Ingested {source} as {result.source_id}")
+        else:
+            typer.echo(f"Skipped {source} (already ingested as {result.source_id})")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command("list")
+def list_sources():
+    """List ingested sources."""
+    try:
+        cfg, store = _load()
+        sources = asyncio.run(store.list_sources())
+        if not sources:
+            typer.echo("No sources ingested.")
+            return
+        for s in sources:
+            typer.echo(
+                f"{s['id']}  [{s['chunks']} chunks]  "
+                f"{s.get('title') or '(untitled)'}  <{s.get('origin') or ''}>"
+            )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
+def remove(source_id: str):
+    """Remove an ingested source by id (its embeddings are deleted too)."""
+    try:
+        cfg, store = _load()
+        deleted = asyncio.run(store.delete_source(source_id))
+        typer.echo(f"Removed {source_id}" if deleted else f"No such source: {source_id}")
     except typer.Exit:
         raise
     except Exception as e:
