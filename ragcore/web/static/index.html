@@ -87,9 +87,23 @@ async function loadSessions(){
   $('#sessions').innerHTML = '';
   for(const s of items){
     const li = document.createElement('li');
-    li.textContent = (s.title||s.id) + ' '; const m=document.createElement('span'); m.className='meta'; m.textContent='('+s.messages+')'; li.appendChild(m);
     if(s.id===sessionId) li.className='active';
-    li.onclick = ()=> openSession(s.id);
+    const label = document.createElement('span');
+    label.textContent = (s.title||s.id) + ' ';
+    const m = document.createElement('span'); m.className='meta'; m.textContent='('+s.messages+')';
+    label.appendChild(m);
+    label.style.flex = '1'; label.style.cursor = 'pointer';
+    label.onclick = ()=> openSession(s.id);
+    const ren = document.createElement('span'); ren.className='del'; ren.textContent='✎'; ren.style.color='#2563eb';
+    ren.onclick = async (e)=>{ e.stopPropagation(); const t = prompt('Rename chat', s.title||''); if(t===null) return; const nt=t.trim(); if(!nt) return;
+      try{ await jsend('/api/sessions/'+encodeURIComponent(s.id),'PATCH',{title:nt}); }catch(err){ alert(err.message); } loadSessions(); };
+    const del = document.createElement('span'); del.className='del'; del.textContent='✕';
+    del.onclick = async (e)=>{ e.stopPropagation(); if(!confirm('Delete this chat?')) return;
+      try{ await jsend('/api/sessions/'+encodeURIComponent(s.id),'DELETE'); }catch(err){ alert(err.message); }
+      if(s.id===sessionId){ sessionId=null; $('#log').innerHTML=''; } loadSessions(); };
+    const controls = document.createElement('span');
+    controls.appendChild(ren); controls.appendChild(document.createTextNode(' ')); controls.appendChild(del);
+    li.appendChild(label); li.appendChild(controls);
     $('#sessions').appendChild(li);
   }
 }
