@@ -31,6 +31,10 @@ class AddSourceRequest(BaseModel):
     origin: str
 
 
+class RenameRequest(BaseModel):
+    title: str
+
+
 def get_config() -> Config:  # overridden in create_app
     raise RuntimeError("config dependency not configured")
 
@@ -76,6 +80,15 @@ def create_app(config: Config) -> FastAPI:
     async def create_session(req: CreateSessionRequest,
                              ss: SessionStore = Depends(get_session_store)):
         return {"id": await ss.create_session(title=req.title)}
+
+    @app.patch("/api/sessions/{sid}")
+    async def rename_session(sid: str, req: RenameRequest,
+                             ss: SessionStore = Depends(get_session_store)):
+        return {"renamed": await ss.rename_session(sid, req.title)}
+
+    @app.delete("/api/sessions/{sid}")
+    async def delete_session(sid: str, ss: SessionStore = Depends(get_session_store)):
+        return {"deleted": await ss.delete_session(sid)}
 
     @app.get("/api/sessions/{sid}/messages")
     async def get_messages(sid: str, ss: SessionStore = Depends(get_session_store)):

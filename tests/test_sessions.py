@@ -39,3 +39,22 @@ async def test_list_sessions_counts_messages(sessions):
     by_id = {s["id"]: s for s in await sessions.list_sessions()}
     assert by_id[s1]["messages"] == 1 and by_id[s1]["title"] == "A"
     assert by_id[s2]["messages"] == 0
+
+
+async def test_rename_session(sessions):
+    sid = await sessions.create_session(title="old")
+    assert await sessions.rename_session(sid, "new") is True
+    titles = {s["id"]: s["title"] for s in await sessions.list_sessions()}
+    assert titles[sid] == "new"
+    assert await sessions.rename_session("chat_session:nope", "x") is False
+    assert await sessions.rename_session("not-an-id", "x") is False
+
+
+async def test_delete_session_cascades(sessions):
+    sid = await sessions.create_session(title="d")
+    await sessions.add_message(sid, "user", "hi")
+    assert await sessions.delete_session(sid) is True
+    assert sid not in {s["id"] for s in await sessions.list_sessions()}
+    assert await sessions.get_history(sid) == []          # messages cascaded away
+    assert await sessions.delete_session(sid) is False     # already gone
+    assert await sessions.delete_session("not-an-id") is False

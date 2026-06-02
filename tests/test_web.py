@@ -30,6 +30,12 @@ class FakeSessionStore:
     async def get_history(self, sid, limit=None):
         return [{"role": "user", "content": "hi", "citations": None, "created": "t"}]
 
+    async def rename_session(self, sid, title):
+        return True
+
+    async def delete_session(self, sid):
+        return True
+
 
 class FakeStore:
     async def list_sources(self):
@@ -89,6 +95,16 @@ def test_sources_crud(client):
     r = client.post("/api/sources", json={"origin": "/tmp/x.txt"})
     assert r.status_code == 200 and r.json() == {"source_id": "source:new", "created": True}
     r = client.delete("/api/sources/source:1")
+    assert r.status_code == 200 and r.json() == {"deleted": True}
+
+
+def test_rename_session_endpoint(client):
+    r = client.patch("/api/sessions/chat_session:1", json={"title": "New"})
+    assert r.status_code == 200 and r.json() == {"renamed": True}
+
+
+def test_delete_session_endpoint(client):
+    r = client.delete("/api/sessions/chat_session:1")
     assert r.status_code == 200 and r.json() == {"deleted": True}
 
 

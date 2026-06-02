@@ -92,3 +92,40 @@ class SessionStore:
             raise StoreError(f"list_sessions failed: {e}") from e
         finally:
             await db.close()
+
+    async def rename_session(self, session_id: str, title: str) -> bool:
+        try:
+            rid = RecordID.parse(session_id)
+        except Exception:
+            return False
+        db = self._connect()
+        try:
+            await self._signin(db)
+            existing = self._rows(await db.query(
+                "SELECT id FROM chat_session WHERE id = $rid;", {"rid": rid}))
+            if not existing:
+                return False
+            await db.query(
+                "UPDATE $rid SET title = $title, updated = time::now();",
+                {"rid": rid, "title": title})
+            return True
+        except Exception as e:
+            raise StoreError(f"rename_session failed: {e}") from e
+        finally:
+            await db.close()
+
+    async def delete_session(self, session_id: str) -> bool:
+        try:
+            rid = RecordID.parse(session_id)
+        except Exception:
+            return False
+        db = self._connect()
+        try:
+            await self._signin(db)
+            deleted = self._rows(await db.query(
+                "DELETE $rid RETURN BEFORE;", {"rid": rid}))
+            return bool(deleted)
+        except Exception as e:
+            raise StoreError(f"delete_session failed: {e}") from e
+        finally:
+            await db.close()
