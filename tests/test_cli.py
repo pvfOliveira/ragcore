@@ -57,3 +57,60 @@ def test_remove_command_missing(monkeypatch):
     result = runner.invoke(cli_mod.app, ["remove", "source:nope"])
     assert result.exit_code == 1
     assert "No such source" in result.stdout
+
+
+def test_ingest_async_enqueues(monkeypatch):
+    from ragcore.jobs import EnqueueResult
+
+    class FakeQueue:
+        def __init__(self, surreal):
+            pass
+
+        async def enqueue(self, origin):
+            return EnqueueResult(job_id="ingestion_job:1", status="queued")
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.jobs.JobQueue", FakeQueue)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["ingest", "doc.txt", "--async"])
+    assert result.exit_code == 0
+    assert "Queued doc.txt as job ingestion_job:1" in result.stdout
+
+
+def test_jobs_command_lists(monkeypatch):
+    class FakeQueue:
+        def __init__(self, surreal):
+            pass
+
+        async def list_jobs(self, status=None):
+            return [{"id": "ingestion_job:1", "origin": "/tmp/a.txt",
+                     "status": "done", "source_id": "source:1",
+                     "error": None, "created": "2026-06-02"}]
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.jobs.JobQueue", FakeQueue)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["jobs"])
+    assert result.exit_code == 0
+    assert "ingestion_job:1" in result.stdout
+    assert "done" in result.stdout
+
+
+def test_worker_once_runs(monkeypatch):
+    calls = {}
+
+    async def fake_run_worker(config, *, once=False, poll_interval=2.0, queue=None, store=None):
+        calls["once"] = once
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.worker.run_worker", fake_run_worker)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["worker", "--once"])
+    assert result.exit_code == 0
+    assert calls.get("once") is True

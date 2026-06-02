@@ -55,10 +55,23 @@ def init():
 
 
 @app.command()
-def ingest(source: str):
+def ingest(
+    source: str,
+    is_async: bool = typer.Option(False, "--async", help="Queue as a background job instead of ingesting now"),
+):
     """Ingest a file path or URL (skips if the same origin was already ingested)."""
     try:
         cfg, store = _load()
+        if is_async:
+            from ragcore.jobs import JobQueue
+            res = asyncio.run(JobQueue(cfg.surreal).enqueue(source))
+            if res.status == "queued":
+                typer.echo(f"Queued {source} as job {res.job_id}")
+            elif res.status == "exists":
+                typer.echo(f"Already queued {source} (job {res.job_id})")
+            else:  # already_ingested
+                typer.echo(f"Skipped {source} (already ingested)")
+            return
         result = asyncio.run(ingest_source(source, store, cfg, chunk_size=cfg.chunking.chunk_size))
         if result.created:
             typer.echo(f"Ingested {source} as {result.source_id}")
@@ -101,6 +114,41 @@ def remove(source_id: str):
         else:
             typer.echo(f"No such source: {source_id}")
             raise typer.Exit(code=1)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
+def worker(once: bool = typer.Option(False, "--once", help="Drain the queue and exit")):
+    """Run the background ingestion worker (Ctrl-C to stop)."""
+    try:
+        from ragcore.worker import run_worker
+        cfg, _ = _load()
+        try:
+            asyncio.run(run_worker(cfg, once=once))
+        except KeyboardInterrupt:
+            typer.echo("Worker stopped.")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
+def jobs(status: str = typer.Option(None, "--status", help="Filter by status: queued|running|done|failed")):
+    """List ingestion jobs (newest first)."""
+    try:
+        from ragcore.jobs import JobQueue
+        cfg, _ = _load()
+        rows = asyncio.run(JobQueue(cfg.surreal).list_jobs(status=status))
+        if not rows:
+            typer.echo("No jobs.")
+            return
+        for j in rows:
+            extra = j["source_id"] or j["error"] or ""
+            typer.echo(f"{j['id']}  {j['status']:<8}  {j['origin']}  {extra}")
     except typer.Exit:
         raise
     except Exception as e:
