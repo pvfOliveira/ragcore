@@ -22,3 +22,7 @@ namespace = "ragcore"
 database = "ragcore"
 user = "root"
 password = "root"
+
+[worker]
+max_attempts = 3
+retry_base_seconds = 2

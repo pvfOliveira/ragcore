@@ -35,11 +35,17 @@ class SurrealConfig(BaseModel):
     password: str = "root"
 
 
+class WorkerConfig(BaseModel):
+    max_attempts: int = 3
+    retry_base_seconds: float = 2
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
     chunking: ChunkingConfig = ChunkingConfig()
     surreal: SurrealConfig = SurrealConfig()
+    worker: WorkerConfig = WorkerConfig()
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
@@ -57,4 +63,5 @@ def load_config(path: str | Path = "config.toml") -> Config:
         routing=RoutingConfig(**data.get("routing", {})),
         chunking=ChunkingConfig(**data.get("chunking", {})),
         surreal=SurrealConfig(**data.get("surreal", {})),
+        worker=WorkerConfig(**data.get("worker", {})),
     )

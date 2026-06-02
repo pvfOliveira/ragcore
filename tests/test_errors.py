@@ -24,3 +24,19 @@ def test_classify_unknown_passthrough():
     exc_class, msg = classify_error(Exception("some weird error"))
     assert exc_class is ProviderError
     assert "some weird error" in msg
+
+
+from ragcore.errors import is_transient
+
+
+def test_is_transient_true_for_network_and_rate_limit():
+    assert is_transient(Exception("Connection refused"))
+    assert is_transient(Exception("request timed out"))
+    assert is_transient(Exception("HTTP 503 Service Unavailable"))
+    assert is_transient(Exception("429 rate limit exceeded"))
+
+
+def test_is_transient_false_for_permanent():
+    assert not is_transient(ValueError("No content extracted from /tmp/x"))
+    assert not is_transient(Exception("401 invalid api key"))
+    assert not is_transient(Exception("something totally unknown"))

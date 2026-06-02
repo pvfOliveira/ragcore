@@ -39,3 +39,21 @@ password = "root"
     assert cfg.routing.escalate_over_tokens == 100000
     assert cfg.chunking.chunk_size == 400
     assert cfg.surreal.namespace == "ragcore"
+
+
+def test_worker_config_defaults_and_override(tmp_path):
+    base = (
+        '[models.chat]\nlocal_provider="ollama"\nlocal_model="m"\n'
+        '[models.embedding]\nlocal_provider="ollama"\nlocal_model="e"\n'
+    )
+    f1 = tmp_path / "c1.toml"
+    f1.write_text(base)
+    cfg1 = load_config(f1)
+    assert cfg1.worker.max_attempts == 3
+    assert cfg1.worker.retry_base_seconds == 2
+
+    f2 = tmp_path / "c2.toml"
+    f2.write_text(base + "[worker]\nmax_attempts=5\nretry_base_seconds=1.5\n")
+    cfg2 = load_config(f2)
+    assert cfg2.worker.max_attempts == 5
+    assert cfg2.worker.retry_base_seconds == 1.5

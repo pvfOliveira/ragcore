@@ -28,3 +28,15 @@ def classify_error(exc: Exception) -> tuple[type[RagcoreError], str]:
     if "connection" in text or "timeout" in text or "refused" in text:
         return ProviderError, "Could not reach the model provider. Is the local server running?"
     return ProviderError, str(exc)
+
+
+_TRANSIENT_MARKERS = (
+    "connection", "timeout", "timed out", "refused", "reset",
+    "temporarily", "unavailable", "rate limit", "429", "502", "503",
+)
+
+
+def is_transient(exc: Exception) -> bool:
+    """True only for retryable transient failures (network / provider availability)."""
+    text = str(exc).lower()
+    return any(marker in text for marker in _TRANSIENT_MARKERS)
