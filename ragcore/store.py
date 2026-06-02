@@ -78,6 +78,68 @@ class Store:
         finally:
             await db.close()
 
+    async def find_source_id_by_origin(self, origin: str) -> str | None:
+        db = self._connect()
+        try:
+            await self._signin(db)
+            rows = await db.query(
+                "SELECT id FROM source WHERE origin = $origin LIMIT 1;",
+                {"origin": origin},
+            )
+            result = rows if isinstance(rows, list) else (rows or [])
+            if not result:
+                return None
+            return str(result[0]["id"])
+        except Exception as e:
+            raise StoreError(f"find_source_id_by_origin failed: {e}") from e
+        finally:
+            await db.close()
+
+    async def list_sources(self) -> list[dict[str, Any]]:
+        db = self._connect()
+        try:
+            await self._signin(db)
+            sources = await db.query(
+                "SELECT id, title, origin, created FROM source ORDER BY created DESC;"
+            )
+            counts = await db.query(
+                "SELECT source, count() AS n FROM source_embedding GROUP BY source;"
+            )
+            sources = sources if isinstance(sources, list) else (sources or [])
+            counts = counts if isinstance(counts, list) else (counts or [])
+            count_map = {str(c["source"]): c["n"] for c in counts}
+            return [
+                {
+                    "id": str(s["id"]),
+                    "title": s.get("title"),
+                    "origin": s.get("origin"),
+                    "created": str(s["created"]),
+                    "chunks": count_map.get(str(s["id"]), 0),
+                }
+                for s in sources
+            ]
+        except Exception as e:
+            raise StoreError(f"list_sources failed: {e}") from e
+        finally:
+            await db.close()
+
+    async def delete_source(self, source_id: str) -> bool:
+        db = self._connect()
+        try:
+            await self._signin(db)
+            rows = await db.query(
+                "DELETE $rid RETURN BEFORE;",
+                {"rid": RecordID.parse(source_id)},
+            )
+            # `DELETE ... RETURN BEFORE` returns the pre-delete row(s) as a list;
+            # an empty list means no such record existed.
+            result = rows if isinstance(rows, list) else (rows or [])
+            return len(result) > 0
+        except Exception as e:
+            raise StoreError(f"delete_source failed: {e}") from e
+        finally:
+            await db.close()
+
     async def vector_search(self, query: list[float], k: int = 10) -> list[dict[str, Any]]:
         return await self._call_fn("fn::vector_search($q, $k)", {"q": query, "k": k})
 
