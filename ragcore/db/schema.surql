@@ -46,3 +46,11 @@ DEFINE FUNCTION IF NOT EXISTS fn::vector_search($query: array<float>, $k: int) {
         LIMIT $k
     );
 };
+
+DEFINE TABLE IF NOT EXISTS ingestion_job SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS origin ON TABLE ingestion_job TYPE string;
+DEFINE FIELD IF NOT EXISTS status ON TABLE ingestion_job TYPE string DEFAULT 'queued';
+DEFINE FIELD IF NOT EXISTS source_id ON TABLE ingestion_job TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS error ON TABLE ingestion_job TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS created ON ingestion_job DEFAULT time::now() VALUE $before OR time::now();
+DEFINE FIELD IF NOT EXISTS updated ON ingestion_job DEFAULT time::now() VALUE time::now();
