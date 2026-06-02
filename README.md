@@ -25,11 +25,16 @@ surreal start --user root --pass root rocksdb:./data/db
 
 ```bash
 ragcore init                              # create the SurrealDB schema
-ragcore ingest path/to/document.pdf       # or a URL
+ragcore ingest path/to/document.pdf       # a file or URL (skips if already ingested)
+ragcore list                              # list ingested sources (id, chunks, title, origin)
+ragcore remove source:abc123              # delete a source (its embeddings go too)
 ragcore search "your query"
 ragcore ask "What does the document say about X?"
 ragcore models                            # show configured model roles
 ```
+
+Re-ingesting the same path/URL is a no-op (dedup by origin) — `remove` it first if
+you want to re-index updated content.
 
 ## Worked example
 
