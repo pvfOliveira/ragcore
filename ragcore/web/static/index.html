@@ -99,8 +99,9 @@ async function loadSessions(){
       try{ await jsend('/api/sessions/'+encodeURIComponent(s.id),'PATCH',{title:nt}); }catch(err){ alert(err.message); } loadSessions(); };
     const del = document.createElement('span'); del.className='del'; del.textContent='✕';
     del.onclick = async (e)=>{ e.stopPropagation(); if(!confirm('Delete this chat?')) return;
-      try{ await jsend('/api/sessions/'+encodeURIComponent(s.id),'DELETE'); }catch(err){ alert(err.message); }
-      if(s.id===sessionId){ sessionId=null; $('#log').innerHTML=''; } loadSessions(); };
+      try{ await jsend('/api/sessions/'+encodeURIComponent(s.id),'DELETE');
+        if(s.id===sessionId){ sessionId=null; $('#log').innerHTML=''; } loadSessions();
+      }catch(err){ alert(err.message); } };
     const controls = document.createElement('span');
     controls.appendChild(ren); controls.appendChild(document.createTextNode(' ')); controls.appendChild(del);
     li.appendChild(label); li.appendChild(controls);

@@ -137,4 +137,21 @@ def test_add_source_value_error_maps_to_502(client, monkeypatch):
     monkeypatch.setattr(webapp, "ingest_source", boom)
     r = client.post("/api/sources", json={"origin": "/bad"})
     assert r.status_code == 502 and "detail" in r.json()
-    assert "detail" in r.json()
+
+
+def test_rename_session_not_found(client):
+    class FalseSS(FakeSessionStore):
+        async def rename_session(self, sid, title):
+            return False
+    client.app.dependency_overrides[get_session_store] = lambda: FalseSS()
+    r = client.patch("/api/sessions/chat_session:nope", json={"title": "y"})
+    assert r.status_code == 200 and r.json() == {"renamed": False}
+
+
+def test_delete_session_not_found(client):
+    class FalseSS(FakeSessionStore):
+        async def delete_session(self, sid):
+            return False
+    client.app.dependency_overrides[get_session_store] = lambda: FalseSS()
+    r = client.delete("/api/sessions/chat_session:nope")
+    assert r.status_code == 200 and r.json() == {"deleted": False}

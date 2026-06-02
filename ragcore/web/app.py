@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ragcore.chat import chat_turn
 from ragcore.config import Config
@@ -32,7 +32,7 @@ class AddSourceRequest(BaseModel):
 
 
 class RenameRequest(BaseModel):
-    title: str
+    title: str = Field(min_length=1)
 
 
 def get_config() -> Config:  # overridden in create_app
