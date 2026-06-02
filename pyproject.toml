@@ -30,6 +30,12 @@ ragcore = "ragcore.cli:app"
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
+# Explicit package discovery — without this, setuptools' flat-layout auto-discovery
+# fails once a runtime `data/` dir exists at the repo root ("Multiple top-level
+# packages discovered: ['data', 'ragcore']"). Ship only the ragcore package tree.
+[tool.setuptools.packages.find]
+include = ["ragcore*"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
