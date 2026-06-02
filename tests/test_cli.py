@@ -151,3 +151,47 @@ def test_retry_command_not_found(monkeypatch):
     result = runner.invoke(cli_mod.app, ["retry", "ingestion_job:nope"])
     assert result.exit_code == 1
     assert "No failed job" in result.stdout
+
+
+def test_sessions_command_lists(monkeypatch):
+    class FakeSS:
+        def __init__(self, surreal):
+            pass
+
+        async def list_sessions(self):
+            return [{"id": "chat_session:1", "title": "Chat A",
+                     "created": "2026-06-02", "messages": 4}]
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.sessions.SessionStore", FakeSS)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["sessions"])
+    assert result.exit_code == 0
+    assert "chat_session:1" in result.stdout
+    assert "Chat A" in result.stdout
+    assert "4 msgs" in result.stdout
+
+
+def test_chat_repl_one_turn(monkeypatch):
+    class FakeSS:
+        def __init__(self, surreal):
+            pass
+
+        async def create_session(self, title=None):
+            return "chat_session:1"
+
+    async def fake_turn(sess, store, cfg, session_id, message, embed):
+        return {"answer": f"echo: {message}", "citations": ["source:0"]}
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.sessions.SessionStore", FakeSS)
+    monkeypatch.setattr("ragcore.chat.chat_turn", fake_turn)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["chat"], input="hello\n/exit\n")
+    assert result.exit_code == 0
+    assert "echo: hello" in result.stdout
+    assert "Sources: source:0" in result.stdout

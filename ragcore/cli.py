@@ -204,6 +204,59 @@ def ask(question: str, cloud: bool = typer.Option(False, "--cloud", help="Force 
 
 
 @app.command()
+def chat(session: Optional[str] = typer.Option(None, "--session", help="Continue an existing session id")):
+    """Interactive chat over your corpus (history-aware). /exit or Ctrl-D to quit."""
+    try:
+        from ragcore.chat import chat_turn
+        from ragcore.sessions import SessionStore
+        cfg, store = _load()
+        sess = SessionStore(cfg.surreal)
+        session_id = session or asyncio.run(sess.create_session())
+        typer.echo(f"Session {session_id}  (/exit to quit)")
+        embed = _embedder(cfg)
+        while True:
+            try:
+                message = input("you> ")
+            except EOFError:
+                break
+            if message.strip() in ("/exit", "/quit"):
+                break
+            if not message.strip():
+                continue
+            try:
+                result = asyncio.run(chat_turn(sess, store, cfg, session_id, message, embed))
+                typer.echo(result["answer"])
+                if result["citations"]:
+                    typer.echo("Sources: " + ", ".join(result["citations"]))
+            except Exception as e:  # one bad turn must not end the session
+                from ragcore.errors import classify_error
+                _, m = classify_error(e)
+                typer.echo(f"[error] {m}", err=True)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
+def sessions():
+    """List chat sessions."""
+    try:
+        from ragcore.sessions import SessionStore
+        cfg, _ = _load()
+        rows = asyncio.run(SessionStore(cfg.surreal).list_sessions())
+        if not rows:
+            typer.echo("No chat sessions.")
+            return
+        for s in rows:
+            typer.echo(f"{s['id']}  [{s['messages']} msgs]  {s.get('title') or '(untitled)'}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
 def models():
     """Show configured model roles."""
     cfg = load_config(_state["config_path"])
