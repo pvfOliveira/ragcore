@@ -257,6 +257,23 @@ def sessions():
 
 
 @app.command()
+def serve(host: str = typer.Option("127.0.0.1", "--host"),
+          port: int = typer.Option(8080, "--port")):
+    """Serve the local web UI (localhost only, no auth)."""
+    try:
+        import uvicorn
+
+        from ragcore.web.app import create_app
+        cfg = load_config(_state["config_path"])
+        typer.echo(f"ragcore web UI on http://{host}:{port}  (local only, no auth)")
+        uvicorn.run(create_app(cfg), host=host, port=port, log_level="info")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
 def models():
     """Show configured model roles."""
     cfg = load_config(_state["config_path"])

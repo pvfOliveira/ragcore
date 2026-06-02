@@ -65,3 +65,15 @@ Sources: source:0bvnjzqbqvi0u2y8fl7k
 The answer is grounded in the ingested document and cites its sources — fully
 local, no cloud call. Use `ragcore ask --cloud "..."` to force cloud escalation
 (requires a `cloud_model` in `config.toml` and the provider's API key).
+
+## Web UI
+
+A thin local chat UI (FastAPI + one HTML page, no build step):
+
+~~~bash
+surreal start --user root --pass root rocksdb:./data/db   # in another terminal
+ragcore serve            # http://127.0.0.1:8080  (localhost only, no auth)
+~~~
+
+Open the URL: add sources (URL/path) in the sidebar, start a chat, switch sessions.
+It is unauthenticated and bound to localhost — do not expose it to a network as-is.
