@@ -100,7 +100,7 @@ class Store:
         try:
             await self._signin(db)
             sources = await db.query(
-                "SELECT id, title, origin, created FROM source ORDER BY created DESC;"
+                "SELECT id, title, origin, created FROM source ORDER BY created DESC, id DESC;"
             )
             counts = await db.query(
                 "SELECT source, count() AS n FROM source_embedding GROUP BY source;"
@@ -124,12 +124,17 @@ class Store:
             await db.close()
 
     async def delete_source(self, source_id: str) -> bool:
+        try:
+            rid = RecordID.parse(source_id)
+        except Exception:
+            # A malformed id can't reference any stored source -> treat as "not found".
+            return False
         db = self._connect()
         try:
             await self._signin(db)
             rows = await db.query(
                 "DELETE $rid RETURN BEFORE;",
-                {"rid": RecordID.parse(source_id)},
+                {"rid": rid},
             )
             # `DELETE ... RETURN BEFORE` returns the pre-delete row(s) as a list;
             # an empty list means no such record existed.

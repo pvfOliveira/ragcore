@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from ragcore.config import SurrealConfig
@@ -19,7 +21,9 @@ async def _seed(store):
         {"order": 0, "content": "alpha", "embedding": [1.0, 0.0]},
         {"order": 1, "content": "beta", "embedding": [0.0, 1.0]},
     ])
-    # Distinct creation timestamps so newest-first ordering is deterministic.
+    # Guarantee a distinct, later creation timestamp so newest-first ordering is
+    # deterministic (record ids are random, so they can't tie-break by recency).
+    await asyncio.sleep(0.01)
     src2 = await store.create_source(title="Doc2", full_text="second", origin="origin-2")
     await store.add_embeddings(src2, [
         {"order": 0, "content": "gamma", "embedding": [1.0, 0.0]},
@@ -64,8 +68,15 @@ async def test_delete_source(store):
     assert "origin-1" not in origins
     total_after = sum(s["chunks"] for s in remaining)
     assert total_after == 1
+    # The source row itself is gone, so it's no longer findable by origin.
+    assert await store.find_source_id_by_origin("origin-1") is None
 
 
 async def test_delete_source_missing(store):
     await _seed(store)
     assert await store.delete_source("source:doesnotexist") is False
+
+
+async def test_delete_source_malformed_id(store):
+    # A malformed id can't reference a stored source -> False, no exception.
+    assert await store.delete_source("not-a-valid-id") is False

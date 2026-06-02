@@ -96,7 +96,11 @@ def remove(source_id: str):
     try:
         cfg, store = _load()
         deleted = asyncio.run(store.delete_source(source_id))
-        typer.echo(f"Removed {source_id}" if deleted else f"No such source: {source_id}")
+        if deleted:
+            typer.echo(f"Removed {source_id}")
+        else:
+            typer.echo(f"No such source: {source_id}")
+            raise typer.Exit(code=1)
     except typer.Exit:
         raise
     except Exception as e:

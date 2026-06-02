@@ -55,5 +55,5 @@ def test_remove_command_missing(monkeypatch):
             return False
     monkeypatch.setattr(cli_mod, "_load", lambda: (None, FakeStore()))
     result = runner.invoke(cli_mod.app, ["remove", "source:nope"])
-    assert result.exit_code == 0
+    assert result.exit_code == 1
     assert "No such source" in result.stdout
