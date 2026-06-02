@@ -26,3 +26,6 @@ password = "root"
 [worker]
 max_attempts = 3
 retry_base_seconds = 2
+
+[chat]
+history_window = 10

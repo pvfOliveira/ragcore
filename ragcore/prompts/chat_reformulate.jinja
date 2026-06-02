@@ -1,0 +1,11 @@
+Given the conversation so far and the user's latest message, write a single standalone
+search query (no explanation, no quotes) capturing what to look up in the document store.
+
+Conversation:
+{% for m in history %}
+{{ m.role }}: {{ m.content }}
+{% endfor %}
+
+Latest message: {{ message }}
+
+Standalone search query:

@@ -40,12 +40,17 @@ class WorkerConfig(BaseModel):
     retry_base_seconds: float = 2
 
 
+class ChatConfig(BaseModel):
+    history_window: int = 10
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
     chunking: ChunkingConfig = ChunkingConfig()
     surreal: SurrealConfig = SurrealConfig()
     worker: WorkerConfig = WorkerConfig()
+    chat: ChatConfig = ChatConfig()
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
@@ -64,4 +69,5 @@ def load_config(path: str | Path = "config.toml") -> Config:
         chunking=ChunkingConfig(**data.get("chunking", {})),
         surreal=SurrealConfig(**data.get("surreal", {})),
         worker=WorkerConfig(**data.get("worker", {})),
+        chat=ChatConfig(**data.get("chat", {})),
     )

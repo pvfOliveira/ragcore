@@ -1,5 +1,5 @@
 from pathlib import Path
-from ragcore.config import load_config
+from ragcore.config import load_config, ChatConfig
 
 
 def test_load_config(tmp_path: Path):
@@ -57,3 +57,16 @@ def test_worker_config_defaults_and_override(tmp_path):
     cfg2 = load_config(f2)
     assert cfg2.worker.max_attempts == 5
     assert cfg2.worker.retry_base_seconds == 1.5
+
+
+def test_chat_config_default_and_override(tmp_path):
+    base = (
+        '[models.chat]\nlocal_provider="ollama"\nlocal_model="m"\n'
+        '[models.embedding]\nlocal_provider="ollama"\nlocal_model="e"\n'
+    )
+    f1 = tmp_path / "c1.toml"
+    f1.write_text(base)
+    assert load_config(f1).chat.history_window == 10
+    f2 = tmp_path / "c2.toml"
+    f2.write_text(base + "[chat]\nhistory_window=4\n")
+    assert load_config(f2).chat.history_window == 4
