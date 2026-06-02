@@ -30,3 +30,33 @@ ragcore search "your query"
 ragcore ask "What does the document say about X?"
 ragcore models                            # show configured model roles
 ```
+
+## Worked example
+
+With SurrealDB running and Ollama serving (see Setup), ingest the bundled sample
+and ask a question about it:
+
+```console
+$ ragcore init
+Schema initialized.
+
+$ ragcore ingest examples/ragcore_demo.md
+Ingested examples/ragcore_demo.md as source:0bvnjzqbqvi0u2y8fl7k
+
+$ ragcore search "how does retrieval work"
+[source:0bvnjzqbqvi0u2y8fl7k] # ragcore architecture
+ragcore is a local-first Retrieval-Augmented Generation system. Ingestion extracts...
+
+$ ragcore ask "How does ragcore do retrieval, and where are embeddings stored?"
+Ragcore retrieves information through a combination of methods: it first runs a
+vector similarity search and a BM25 full-text search independently. After obtaining
+their respective rankings, these results are then fused using Reciprocal Rank
+Fusion [source:1]. The embeddings used in this process are stored in SurrealDB
+along with the context chunks from which they were derived [source:2].
+
+Sources: source:0bvnjzqbqvi0u2y8fl7k
+```
+
+The answer is grounded in the ingested document and cites its sources — fully
+local, no cloud call. Use `ragcore ask --cloud "..."` to force cloud escalation
+(requires a `cloud_model` in `config.toml` and the provider's API key).
