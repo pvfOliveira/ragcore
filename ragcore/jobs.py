@@ -72,7 +72,7 @@ class JobQueue:
             await self._signin(db)
             cands = self._rows(await db.query(
                 "SELECT id, created FROM ingestion_job WHERE status = 'queued' "
-                "ORDER BY created ASC LIMIT 1;"))
+                "AND next_attempt_at <= time::now() ORDER BY created ASC LIMIT 1;"))
             if not cands:
                 return None
             rid = cands[0]["id"]
@@ -88,7 +88,8 @@ class JobQueue:
             if not claimed:
                 return None
             job = claimed[0]
-            return {"id": str(job["id"]), "origin": job["origin"]}
+            return {"id": str(job["id"]), "origin": job["origin"],
+                    "attempts": job.get("attempts", 0)}
         except Exception as e:
             raise StoreError(f"claim_next failed: {e}") from e
         finally:
@@ -97,8 +98,43 @@ class JobQueue:
     async def mark_done(self, job_id: str, source_id: str) -> None:
         await self._set(job_id, {"status": "done", "source_id": source_id})
 
-    async def mark_failed(self, job_id: str, error: str) -> None:
-        await self._set(job_id, {"status": "failed", "error": error})
+    async def mark_failed(self, job_id: str, error: str, attempts: int | None = None) -> None:
+        fields = {"status": "failed", "error": error}
+        if attempts is not None:
+            fields["attempts"] = attempts
+        await self._set(job_id, fields)
+
+    async def mark_retry(self, job_id: str, attempts: int, delay_seconds: float, error: str) -> None:
+        db = self._connect()
+        try:
+            await self._signin(db)
+            delay = f"{max(0, int(round(delay_seconds)))}s"
+            await db.query(
+                "UPDATE $rid SET status = 'queued', attempts = $attempts, error = $error, "
+                "next_attempt_at = time::now() + type::duration($delay), updated = time::now();",
+                {"rid": RecordID.parse(job_id), "attempts": attempts, "error": error, "delay": delay})
+        except Exception as e:
+            raise StoreError(f"mark_retry failed: {e}") from e
+        finally:
+            await db.close()
+
+    async def requeue(self, job_id: str) -> bool:
+        try:
+            rid = RecordID.parse(job_id)
+        except Exception:
+            return False  # malformed id -> no such failed job
+        db = self._connect()
+        try:
+            await self._signin(db)
+            updated = self._rows(await db.query(
+                "UPDATE $rid SET status = 'queued', attempts = 0, error = NONE, "
+                "next_attempt_at = time::now(), updated = time::now() "
+                "WHERE status = 'failed' RETURN AFTER;", {"rid": rid}))
+            return bool(updated)
+        except Exception as e:
+            raise StoreError(f"requeue failed: {e}") from e
+        finally:
+            await db.close()
 
     async def _set(self, job_id: str, fields: dict) -> None:
         db = self._connect()
@@ -119,12 +155,12 @@ class JobQueue:
             await self._signin(db)
             if status:
                 rows = await db.query(
-                    "SELECT id, origin, status, source_id, error, created "
+                    "SELECT id, origin, status, attempts, source_id, error, created "
                     "FROM ingestion_job WHERE status = $s ORDER BY created DESC, id DESC;",
                     {"s": status})
             else:
                 rows = await db.query(
-                    "SELECT id, origin, status, source_id, error, created "
+                    "SELECT id, origin, status, attempts, source_id, error, created "
                     "FROM ingestion_job ORDER BY created DESC, id DESC;")
             out = []
             for r in self._rows(rows):
@@ -132,6 +168,7 @@ class JobQueue:
                     "id": str(r["id"]),
                     "origin": r.get("origin"),
                     "status": r.get("status"),
+                    "attempts": r.get("attempts", 0),
                     "source_id": str(r["source_id"]) if r.get("source_id") else None,
                     "error": r.get("error"),
                     "created": str(r.get("created")),

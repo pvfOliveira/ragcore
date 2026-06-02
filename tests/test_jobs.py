@@ -82,3 +82,44 @@ async def test_claim_next_is_race_safe(setup):
     assert len(claimed) == 1
     assert claimed[0]["origin"] == "/tmp/a.txt"
     assert await queue.claim_next() is None
+
+
+async def test_claim_next_skips_not_yet_due(setup):
+    store, queue = setup
+    jid = (await queue.enqueue("/tmp/a.txt")).job_id
+    await queue.claim_next()  # -> running
+    await queue.mark_retry(jid, attempts=1, delay_seconds=300, error="boom")  # due in 5 min
+    assert await queue.claim_next() is None
+    q = await queue.list_jobs(status="queued")
+    assert len(q) == 1 and q[0]["attempts"] == 1
+
+
+async def test_claim_next_returns_due_retry_with_attempts(setup):
+    store, queue = setup
+    jid = (await queue.enqueue("/tmp/a.txt")).job_id
+    await queue.claim_next()
+    await queue.mark_retry(jid, attempts=1, delay_seconds=0, error="boom")  # due now
+    claimed = await queue.claim_next()
+    assert claimed is not None and claimed["attempts"] == 1
+
+
+async def test_mark_failed_stores_attempts(setup):
+    store, queue = setup
+    jid = (await queue.enqueue("/tmp/a.txt")).job_id
+    await queue.claim_next()
+    await queue.mark_failed(jid, "permanent", attempts=2)
+    failed = await queue.list_jobs(status="failed")
+    assert failed[0]["attempts"] == 2 and failed[0]["error"] == "permanent"
+
+
+async def test_requeue_resets_failed_job(setup):
+    store, queue = setup
+    jid = (await queue.enqueue("/tmp/a.txt")).job_id
+    await queue.claim_next()
+    await queue.mark_failed(jid, "boom", attempts=3)
+    assert await queue.requeue(jid) is True
+    q = await queue.list_jobs(status="queued")
+    assert len(q) == 1 and q[0]["attempts"] == 0
+    assert await queue.requeue(jid) is False           # already queued, not failed
+    assert await queue.requeue("ingestion_job:nope") is False
+    assert await queue.requeue("not-an-id") is False   # malformed -> False, no raise

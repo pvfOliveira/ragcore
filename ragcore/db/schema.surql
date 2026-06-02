@@ -52,5 +52,7 @@ DEFINE FIELD IF NOT EXISTS origin ON TABLE ingestion_job TYPE string;
 DEFINE FIELD IF NOT EXISTS status ON TABLE ingestion_job TYPE string DEFAULT 'queued';
 DEFINE FIELD IF NOT EXISTS source_id ON TABLE ingestion_job TYPE option<string>;
 DEFINE FIELD IF NOT EXISTS error ON TABLE ingestion_job TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS attempts ON TABLE ingestion_job TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS next_attempt_at ON TABLE ingestion_job TYPE datetime DEFAULT time::now();
 DEFINE FIELD IF NOT EXISTS created ON ingestion_job DEFAULT time::now() VALUE $before OR time::now();
 DEFINE FIELD IF NOT EXISTS updated ON ingestion_job DEFAULT time::now() VALUE time::now();
