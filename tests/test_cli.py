@@ -195,3 +195,31 @@ def test_chat_repl_one_turn(monkeypatch):
     assert result.exit_code == 0
     assert "echo: hello" in result.stdout
     assert "Sources: source:0" in result.stdout
+
+
+def test_chat_repl_survives_a_turn_error(monkeypatch):
+    # A failing turn must not end the session — the loop catches it and continues.
+    class FakeSS:
+        def __init__(self, surreal):
+            pass
+
+        async def create_session(self, title=None):
+            return "chat_session:1"
+
+    calls = {"n": 0}
+
+    async def flaky_turn(sess, store, cfg, session_id, message, embed):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("connection refused")
+        return {"answer": f"ok: {message}", "citations": []}
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.sessions.SessionStore", FakeSS)
+    monkeypatch.setattr("ragcore.chat.chat_turn", flaky_turn)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["chat"], input="bad\ngood\n/exit\n")
+    assert result.exit_code == 0
+    assert "ok: good" in result.stdout  # second turn ran after the first errored

@@ -35,7 +35,10 @@ class FakeSessionStore:
         self.added = []
 
     async def get_history(self, session_id, limit=None):
-        return self._history[-limit:] if limit else self._history
+        # Mirror SessionStore.get_history exactly (limit=0 -> []).
+        if limit is None:
+            return self._history
+        return self._history[-limit:] if limit > 0 else []
 
     async def add_message(self, session_id, role, content, citations=None):
         self.added.append((role, content, citations))
@@ -77,3 +80,23 @@ async def test_followup_turn_reformulates(monkeypatch):
     assert chat.calls == 2  # reformulation + answer
     assert "MIT" in result["answer"]
     assert ("user", "what about its license?") in [(r, c) for r, c, _ in ss.added]
+
+
+async def test_blank_reformulation_falls_back_to_raw_message(monkeypatch):
+    # If the reformulation model returns blank, the search query falls back to the
+    # raw user message (chat.py: `_clean(...) or message`).
+    chat = FakeChat(["   ", "answer [source:0]"])  # blank reformulation, then answer
+    monkeypatch.setattr(chat_mod, "_build_chat",
+                        lambda config, content="", force_cloud=False: chat)
+    captured = {}
+
+    async def cap_hybrid(store, embedder_fn, query, k=10):
+        captured["query"] = query
+        return [{"id": "e:1", "source": "source:0", "content": "ctx"}]
+
+    monkeypatch.setattr(chat_mod, "hybrid_search", cap_hybrid)
+    ss = FakeSessionStore(history=[
+        {"role": "user", "content": "prior", "citations": None, "created": "t"}])
+
+    await chat_turn(ss, object(), _config(), "chat_session:1", "the real message", None)
+    assert captured["query"] == "the real message"

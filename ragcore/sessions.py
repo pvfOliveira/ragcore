@@ -42,6 +42,8 @@ class SessionStore:
         try:
             await self._signin(db)
             sid = RecordID.parse(session_id)
+            # seq = current message count. Assumes a single writer per session (the
+            # interactive REPL); concurrent writers could collide on seq (accepted).
             existing = self._rows(await db.query(
                 "SELECT id FROM chat_message WHERE session = $sid;", {"sid": sid}))
             seq = len(existing)
