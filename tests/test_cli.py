@@ -87,7 +87,7 @@ def test_jobs_command_lists(monkeypatch):
         async def list_jobs(self, status=None):
             return [{"id": "ingestion_job:1", "origin": "/tmp/a.txt",
                      "status": "done", "source_id": "source:1",
-                     "error": None, "created": "2026-06-02"}]
+                     "error": None, "created": "2026-06-02", "attempts": 0}]
 
     class Cfg:
         surreal = None
@@ -98,6 +98,7 @@ def test_jobs_command_lists(monkeypatch):
     assert result.exit_code == 0
     assert "ingestion_job:1" in result.stdout
     assert "done" in result.stdout
+    assert "attempts=0" in result.stdout
 
 
 def test_worker_once_runs(monkeypatch):
@@ -114,3 +115,39 @@ def test_worker_once_runs(monkeypatch):
     result = runner.invoke(cli_mod.app, ["worker", "--once"])
     assert result.exit_code == 0
     assert calls.get("once") is True
+
+
+def test_retry_command(monkeypatch):
+    class FakeQueue:
+        def __init__(self, surreal):
+            pass
+
+        async def requeue(self, job_id):
+            return True
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.jobs.JobQueue", FakeQueue)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["retry", "ingestion_job:1"])
+    assert result.exit_code == 0
+    assert "Requeued ingestion_job:1" in result.stdout
+
+
+def test_retry_command_not_found(monkeypatch):
+    class FakeQueue:
+        def __init__(self, surreal):
+            pass
+
+        async def requeue(self, job_id):
+            return False
+
+    class Cfg:
+        surreal = None
+
+    monkeypatch.setattr("ragcore.jobs.JobQueue", FakeQueue)
+    monkeypatch.setattr(cli_mod, "_load", lambda: (Cfg(), None))
+    result = runner.invoke(cli_mod.app, ["retry", "ingestion_job:nope"])
+    assert result.exit_code == 1
+    assert "No failed job" in result.stdout

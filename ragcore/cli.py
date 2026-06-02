@@ -148,7 +148,25 @@ def jobs(status: Optional[str] = typer.Option(None, "--status", help="Filter by 
             return
         for j in rows:
             extra = j["source_id"] or j["error"] or ""
-            typer.echo(f"{j['id']}  {j['status']:<8}  {j['origin']}  {extra}")
+            typer.echo(f"{j['id']}  {j['status']:<8}  attempts={j['attempts']}  {j['origin']}  {extra}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
+def retry(job_id: str):
+    """Requeue a failed ingestion job."""
+    try:
+        from ragcore.jobs import JobQueue
+        cfg, _ = _load()
+        ok = asyncio.run(JobQueue(cfg.surreal).requeue(job_id))
+        if ok:
+            typer.echo(f"Requeued {job_id}")
+        else:
+            typer.echo(f"No failed job {job_id}")
+            raise typer.Exit(code=1)
     except typer.Exit:
         raise
     except Exception as e:
