@@ -56,3 +56,20 @@ DEFINE FIELD IF NOT EXISTS attempts ON TABLE ingestion_job TYPE int DEFAULT 0;
 DEFINE FIELD IF NOT EXISTS next_attempt_at ON TABLE ingestion_job TYPE datetime DEFAULT time::now();
 DEFINE FIELD IF NOT EXISTS created ON ingestion_job DEFAULT time::now() VALUE $before OR time::now();
 DEFINE FIELD IF NOT EXISTS updated ON ingestion_job DEFAULT time::now() VALUE time::now();
+
+DEFINE TABLE IF NOT EXISTS chat_session SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS title ON TABLE chat_session TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS created ON chat_session DEFAULT time::now() VALUE $before OR time::now();
+DEFINE FIELD IF NOT EXISTS updated ON chat_session DEFAULT time::now() VALUE time::now();
+
+DEFINE TABLE IF NOT EXISTS chat_message SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS session ON TABLE chat_message TYPE record<chat_session>;
+DEFINE FIELD IF NOT EXISTS seq ON TABLE chat_message TYPE int DEFAULT 0;
+DEFINE FIELD IF NOT EXISTS role ON TABLE chat_message TYPE string;
+DEFINE FIELD IF NOT EXISTS content ON TABLE chat_message TYPE string;
+DEFINE FIELD IF NOT EXISTS citations ON TABLE chat_message TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS created ON chat_message DEFAULT time::now() VALUE $before OR time::now();
+
+DEFINE EVENT IF NOT EXISTS chat_session_delete ON TABLE chat_session WHEN ($after == NONE) THEN {
+    DELETE chat_message WHERE session == $before.id;
+};
