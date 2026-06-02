@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from ragcore.chat import chat_turn
 from ragcore.config import Config
 from ragcore.embedding import generate_embedding
-from ragcore.errors import ConfigurationError, RagcoreError, classify_error
+from ragcore.errors import ConfigurationError, classify_error
 from ragcore.ingest import ingest_source
 from ragcore.sessions import SessionStore
 from ragcore.store import Store
@@ -53,15 +53,20 @@ def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="ragcore")
     app.dependency_overrides[get_config] = lambda: config
 
-    @app.exception_handler(RagcoreError)
-    async def _on_ragcore_error(request, exc: RagcoreError):
-        _, message = classify_error(exc)
-        status = 400 if isinstance(exc, ConfigurationError) else 502
-        return JSONResponse(status_code=status, content={"detail": message})
+    page = (_STATIC / "index.html").read_text()
+
+    # Catch-all so the two most common runtime failures (provider down during chat,
+    # bad/empty source during ingest) return a friendly {detail} instead of a raw 500.
+    # classify_error handles RagcoreError and raw provider/value errors alike.
+    @app.exception_handler(Exception)
+    async def _on_error(request, exc: Exception):
+        cls, message = classify_error(exc)
+        is_config = isinstance(exc, ConfigurationError) or issubclass(cls, ConfigurationError)
+        return JSONResponse(status_code=400 if is_config else 502, content={"detail": message})
 
     @app.get("/", response_class=HTMLResponse)
     async def index():
-        return HTMLResponse((_STATIC / "index.html").read_text())
+        return HTMLResponse(page)
 
     @app.get("/api/sessions")
     async def list_sessions(ss: SessionStore = Depends(get_session_store)):

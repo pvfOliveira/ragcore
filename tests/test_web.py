@@ -54,7 +54,9 @@ def client(monkeypatch):
 
     monkeypatch.setattr(webapp, "chat_turn", fake_chat_turn)
     monkeypatch.setattr(webapp, "ingest_source", fake_ingest)
-    return TestClient(app)
+    # raise_server_exceptions=False mirrors real uvicorn: the Exception handler's
+    # response is returned (not re-raised), so error mapping is testable.
+    return TestClient(app, raise_server_exceptions=False)
 
 
 def test_index_serves_html(client):
@@ -97,4 +99,26 @@ def test_store_error_maps_to_502(client):
     client.app.dependency_overrides[get_store] = lambda: Boom()
     r = client.get("/api/sources")
     assert r.status_code == 502
+
+
+def test_create_session_without_title(client):
+    # The frontend always POSTs {} (no title) — exercise that path.
+    r = client.post("/api/sessions", json={})
+    assert r.status_code == 200 and r.json()["id"] == "chat_session:new"
+
+
+def test_chat_raw_provider_error_maps_to_502(client, monkeypatch):
+    async def boom(ss, store, cfg, sid, message, embed):
+        raise ConnectionError("connection refused")
+    monkeypatch.setattr(webapp, "chat_turn", boom)
+    r = client.post("/api/sessions/chat_session:1/chat", json={"message": "hi"})
+    assert r.status_code == 502 and "detail" in r.json()
+
+
+def test_add_source_value_error_maps_to_502(client, monkeypatch):
+    async def boom(origin, store, cfg, chunk_size=400):
+        raise ValueError("No content extracted")
+    monkeypatch.setattr(webapp, "ingest_source", boom)
+    r = client.post("/api/sources", json={"origin": "/bad"})
+    assert r.status_code == 502 and "detail" in r.json()
     assert "detail" in r.json()

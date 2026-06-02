@@ -72,10 +72,13 @@ async function loadSources(){
   $('#sources').innerHTML = '';
   for(const s of items){
     const li = document.createElement('li');
-    li.innerHTML = '<span>'+(s.title||s.origin||s.id)+' <span class="meta">['+s.chunks+']</span></span>';
+    const label = document.createElement('span');
+    label.textContent = (s.title||s.origin||s.id);  // textContent: no HTML injection from extracted titles
+    const meta = document.createElement('span'); meta.className='meta'; meta.textContent=' ['+s.chunks+']';
+    label.appendChild(meta);
     const x = document.createElement('span'); x.className='del'; x.textContent='✕';
-    x.onclick = async (e)=>{ e.stopPropagation(); await fetch('/api/sources/'+encodeURIComponent(s.id),{method:'DELETE'}); loadSources(); };
-    li.appendChild(x); $('#sources').appendChild(li);
+    x.onclick = async (e)=>{ e.stopPropagation(); try{ await jsend('/api/sources/'+encodeURIComponent(s.id),'DELETE'); }catch(err){ alert(err.message); } loadSources(); };
+    li.appendChild(label); li.appendChild(x); $('#sources').appendChild(li);
   }
 }
 
