@@ -256,7 +256,7 @@ ruff check ragcore tests
 
 ### Appendix: where the code contradicts the docs
 
-1. **Vector index.** The local-RAG design (§4, §6, §9) and the README's worked example assume an **HNSW** vector index. The actual `db/schema.surql:40` does a **brute-force cosine full scan** with a comment to swap in MTREE/HNSW later. The brute-force approach is honest in the code, aspirational in the design.
-2. **SurrealDB start command.** Design §10 says `surreal start file:./data/db`. SurrealDB v3 removed the `file:` scheme; the **README and config are correct with `rocksdb:`**. Following the design doc verbatim would fail to start the DB.
+1. **Vector index.** ~~The local-RAG design (§4) assumed an **HNSW** vector index~~ — *corrected 2026-06-02*: the design now reflects the as-built **brute-force cosine full scan** (`db/schema.surql`), with HNSW/MTREE noted as the future seam. (The README's worked example was never index-specific.)
+2. **SurrealDB start command.** ~~Design §10 said `surreal start file:./data/db`~~ — *corrected 2026-06-02* to `rocksdb:` (SurrealDB v3 removed the `file:` scheme). README and config were already correct.
 3. **Web error mapping.** The web-UI design (§3) says errors map "`ConfigurationError`→400, `StoreError`/`ProviderError`→502, else 500." The implementation (`web/app.py:69`) only ever returns **400 or 502** — there is no 500 branch, which is the point: it closes the raw-500 gap. The code is stricter than the spec.
 4. **MVP scope drift (expected, not a bug).** The original design listed web UI, async worker, and chat-history as explicit non-goals/YAGNI (§1, §12). All three now exist via later approved specs — the seams held, which is the design vindicating itself rather than a contradiction.
