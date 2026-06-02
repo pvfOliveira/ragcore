@@ -9,7 +9,7 @@ import asyncio
 
 from loguru import logger
 
-from ragcore.errors import classify_error
+from ragcore.errors import classify_error, is_transient
 from ragcore.ingest import ingest_source
 from ragcore.jobs import JobQueue
 from ragcore.store import Store
@@ -33,5 +33,13 @@ async def run_worker(config, *, once: bool = False, poll_interval: float = 2.0,
             logger.info(f"job {job['id']} done -> {result.source_id} (created={result.created})")
         except Exception as e:  # noqa: BLE001 — one bad job must not stop the loop
             _, message = classify_error(e)
-            await queue.mark_failed(job["id"], message)
-            logger.warning(f"job {job['id']} failed: {message}")
+            attempt = job["attempts"] + 1
+            if is_transient(e) and attempt < config.worker.max_attempts:
+                delay = config.worker.retry_base_seconds * (2 ** (attempt - 1))
+                await queue.mark_retry(job["id"], attempt, delay, message)
+                logger.warning(
+                    f"job {job['id']} attempt {attempt} failed (transient): {message}; "
+                    f"retrying in {delay}s")
+            else:
+                await queue.mark_failed(job["id"], message, attempt)
+                logger.warning(f"job {job['id']} failed after {attempt} attempt(s): {message}")
