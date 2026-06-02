@@ -137,7 +137,7 @@ def worker(once: bool = typer.Option(False, "--once", help="Drain the queue and 
 
 
 @app.command()
-def jobs(status: str = typer.Option(None, "--status", help="Filter by status: queued|running|done|failed")):
+def jobs(status: Optional[str] = typer.Option(None, "--status", help="Filter by status: queued|running|done|failed")):
     """List ingestion jobs (newest first)."""
     try:
         from ragcore.jobs import JobQueue

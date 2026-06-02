@@ -36,6 +36,9 @@ class JobQueue:
         return result if isinstance(result, list) else (result or [])
 
     async def enqueue(self, origin: str) -> EnqueueResult:
+        # Single-user tool: the dedup SELECTs below carry a benign TOCTOU window vs a
+        # concurrent enqueue of the same origin. Worst case is a redundant job that the
+        # worker resolves to created=False (no duplicate data). Not guarded, by design.
         db = self._connect()
         try:
             await self._signin(db)
@@ -60,8 +63,9 @@ class JobQueue:
         """Atomically move the oldest queued job to 'running' and return it.
 
         Two-step (SELECT oldest id, then conditional UPDATE with a status guard) so we
-        do not rely on ORDER BY/LIMIT support inside UPDATE. The guarded UPDATE returns
-        empty if another worker claimed it first.
+        do not rely on ORDER BY/LIMIT support inside UPDATE. A worker that loses the race
+        sees the guard fail one of two ways: an empty result, or a SurrealDB transaction
+        conflict — both mean "someone else claimed it", so we return None either way.
         """
         db = self._connect()
         try:
@@ -72,9 +76,15 @@ class JobQueue:
             if not cands:
                 return None
             rid = cands[0]["id"]
-            claimed = self._rows(await db.query(
-                "UPDATE $rid SET status = 'running', updated = time::now() "
-                "WHERE status = 'queued' RETURN AFTER;", {"rid": rid}))
+            try:
+                claimed = self._rows(await db.query(
+                    "UPDATE $rid SET status = 'running', updated = time::now() "
+                    "WHERE status = 'queued' RETURN AFTER;", {"rid": rid}))
+            except Exception as e:
+                msg = str(e).lower()
+                if "conflict" in msg or "transaction" in msg:
+                    return None  # lost the race to a concurrent worker
+                raise
             if not claimed:
                 return None
             job = claimed[0]

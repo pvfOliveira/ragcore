@@ -70,3 +70,15 @@ async def test_mark_done_and_failed(setup):
     await queue.mark_failed(j2, "boom")
     failed = await queue.list_jobs(status="failed")
     assert len(failed) == 1 and failed[0]["error"] == "boom"
+
+
+async def test_claim_next_is_race_safe(setup):
+    # The increment's central invariant: two workers claiming concurrently must yield
+    # exactly one claim (the guarded UPDATE makes the race loser return None, not steal).
+    store, queue = setup
+    await queue.enqueue("/tmp/a.txt")
+    a, b = await asyncio.gather(queue.claim_next(), queue.claim_next())
+    claimed = [r for r in (a, b) if r is not None]
+    assert len(claimed) == 1
+    assert claimed[0]["origin"] == "/tmp/a.txt"
+    assert await queue.claim_next() is None
