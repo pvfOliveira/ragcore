@@ -275,6 +275,19 @@ def serve(host: str = typer.Option("127.0.0.1", "--host"),
         _fail(e)
 
 
+@app.command("eval")
+def eval_cmd(dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset")):
+    """Evaluate retrieval+answer quality (Ragas + TruLens) with a local Ollama judge."""
+    try:
+        from ragcore.eval.harness import run_eval
+        cfg = load_config(_state["config_path"])
+        run_eval(cfg, dataset)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
 @app.command()
 def models():
     """Show configured model roles."""
