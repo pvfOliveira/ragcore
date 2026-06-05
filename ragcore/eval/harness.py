@@ -59,6 +59,38 @@ def compute_metrics(records: list[dict], *, judge: Any = None) -> dict[str, dict
     }
 
 
+def _patch_trulens_litellm_instrumentation() -> None:
+    """Work around a trulens-vs-litellm version incompatibility.
+
+    TruLens' ``LiteLLM`` provider instruments every class in the ``litellm``
+    module that exposes a ``completion`` attribute. In litellm>=1.87 the module
+    also exposes ``CallTypes`` — an ``Enum`` whose ``completion`` member is *not*
+    a function, so trulens' ``Endpoint._instrument_class`` blows up on
+    ``func.__name__``. We wrap that method to skip any member whose resolved
+    attribute is not a real named function. Idempotent; a no-op if trulens isn't
+    importable or is already patched.
+    """
+    try:
+        from trulens.core.feedback.endpoint import Endpoint
+    except Exception:  # pragma: no cover - trulens optional
+        return
+    if getattr(Endpoint, "_ragcore_instrument_patch", False):
+        return
+
+    original = Endpoint._instrument_class
+
+    def _safe_instrument_class(self, cls, method_name):
+        func = getattr(cls, method_name, None)
+        # Real instrumentable targets are functions/methods carrying __name__;
+        # enum members and other descriptors don't, and must be skipped.
+        if func is not None and not hasattr(func, "__name__"):
+            return None
+        return original(self, cls, method_name)
+
+    Endpoint._instrument_class = _safe_instrument_class
+    Endpoint._ragcore_instrument_patch = True
+
+
 def _litellm_model(judge_model: str) -> str:
     """Map ``config.eval.judge_model`` (``ollama:qwen3:8b``) to a litellm id
     (``ollama/qwen3:8b``). The first ``:`` separates provider from model; any
@@ -79,14 +111,32 @@ class _OllamaJudge:
     def __init__(self, config: Any):
         import os
 
+        import litellm
         from langchain_community.chat_models import ChatLiteLLM
+        from langchain_community.embeddings import OllamaEmbeddings
+        from ragas.embeddings import LangchainEmbeddingsWrapper
         from ragas.llms import LangchainLLMWrapper
+
+        # Ragas' answer_relevancy asks the judge for several question variants
+        # via the OpenAI-style ``n`` sampling param, which Ollama rejects
+        # (``UnsupportedParamsError: ollama does not support parameters ['n']``).
+        # Let litellm silently drop params the backend can't honour.
+        litellm.drop_params = True
+
+        _patch_trulens_litellm_instrumentation()
         from trulens.providers.litellm import LiteLLM
 
         model = _litellm_model(config.eval.judge_model)
         api_base = os.environ.get("OLLAMA_API_BASE", "http://localhost:11434")
 
         self._ragas_llm = LangchainLLMWrapper(ChatLiteLLM(model=model, api_base=api_base))
+        # answer_relevancy embeds the generated questions to compare against the
+        # original, so the ragas metric needs an embeddings model too. Reuse the
+        # configured Ollama embedding model (e.g. nomic-embed-text).
+        embed_role = config.models["embedding"]
+        self._ragas_embeddings = LangchainEmbeddingsWrapper(
+            OllamaEmbeddings(model=embed_role.local_model, base_url=api_base)
+        )
         self._trulens = LiteLLM(model_engine=model, api_base=api_base)
 
     # --- ragas -------------------------------------------------------------
@@ -103,6 +153,9 @@ class _OllamaJudge:
             "context_precision": context_precision,
         }[name]
         metric.llm = self._ragas_llm
+        # answer_relevancy additionally needs an embeddings model.
+        if hasattr(metric, "embeddings"):
+            metric.embeddings = self._ragas_embeddings
         return metric
 
     def _score_ragas(self, name: str, record: dict) -> float:

@@ -46,6 +46,12 @@ class ChatConfig(BaseModel):
 
 class StoreConfig(BaseModel):
     vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus
+    # Persistence locations for the pluggable backends. Defaults live under the
+    # repo `data/` dir; only the selected backend's location is used.
+    chroma_path: str = "data/chroma"
+    faiss_path: str = "data/faiss"
+    milvus_uri: str = "data/milvus.db"
+    collection: str = "ragcore"
 
 
 class RerankConfig(BaseModel):

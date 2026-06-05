@@ -56,6 +56,14 @@ include = ["ragcore*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The live tier (tests/live) needs a real local Ollama and takes minutes; it is
+# opt-in. Run it explicitly with `pytest tests/live -m live`. The default
+# `pytest tests` stays deterministic (and the conftest gate skips live items
+# anyway when Ollama is unreachable).
+addopts = "--ignore=tests/live"
+markers = [
+    "live: tests needing a reachable local Ollama (skipped otherwise)",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

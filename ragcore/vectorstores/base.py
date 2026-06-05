@@ -65,19 +65,23 @@ def make_vector_store(config: typing.Any) -> VectorStore:
             ChromaStore,  # type: ignore[import]
         )
 
-        return ChromaStore(config)
+        return ChromaStore(
+            path=config.store.chroma_path, collection=config.store.collection
+        )
 
     if backend == "faiss":
         from ragcore.vectorstores.faiss_store import FaissStore  # type: ignore[import]
 
-        return FaissStore(config)
+        return FaissStore(path=config.store.faiss_path)
 
     if backend == "milvus":
         from ragcore.vectorstores.milvus_store import (
             MilvusStore,  # type: ignore[import]
         )
 
-        return MilvusStore(config)
+        return MilvusStore(
+            uri=config.store.milvus_uri, collection=config.store.collection
+        )
 
     raise ValueError(
         f"Unknown vector_backend {backend!r}. "

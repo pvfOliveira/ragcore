@@ -2,8 +2,28 @@ import shutil
 import socket
 import subprocess
 import time
+import urllib.request
 
 import pytest
+
+
+def _ollama_up(base: str = "http://localhost:11434") -> bool:
+    """True when a local Ollama HTTP endpoint answers within ~1s."""
+    try:
+        urllib.request.urlopen(base, timeout=1)
+        return True
+    except Exception:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Skip @pytest.mark.live items unless a local Ollama is reachable."""
+    if _ollama_up():
+        return
+    skip_live = pytest.mark.skip(reason="local Ollama not reachable (live tier)")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip_live)
 
 
 def _free_port() -> int:

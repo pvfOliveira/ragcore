@@ -32,6 +32,11 @@ history_window = 10
 
 [store]
 vector_backend = "surreal"   # surreal | chroma | faiss | milvus
+# Persistence locations for the pluggable backends (only the selected one is used):
+chroma_path = "data/chroma"
+faiss_path = "data/faiss"
+milvus_uri = "data/milvus.db"
+collection = "ragcore"
 
 [rerank]
 enabled = false

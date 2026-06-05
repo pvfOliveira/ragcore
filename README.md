@@ -66,6 +66,112 @@ The answer is grounded in the ingested document and cites its sources — fully
 local, no cloud call. Use `ragcore ask --cloud "..."` to force cloud escalation
 (requires a `cloud_model` in `config.toml` and the provider's API key).
 
+## Production RAG upgrade
+
+Optional, config-selectable upgrades layered on the default SurrealDB hybrid
+retrieval. Install the whole bundle with `pip install -e ".[rag-upgrade]"`, or
+pick individual extras as shown below.
+
+### Swappable vector backends
+
+The vector index is pluggable behind a small async `VectorStore` protocol. Pick
+a backend in `config.toml`; SurrealDB stays the source of truth and non-surreal
+backends receive a mirrored write on ingest.
+
+```toml
+[store]
+vector_backend = "chroma"     # surreal (default) | chroma | faiss | milvus
+chroma_path    = "data/chroma"
+faiss_path     = "data/faiss"
+milvus_uri     = "data/milvus.db"
+collection     = "ragcore"
+```
+
+```bash
+pip install -e ".[chroma]"    # or ".[faiss]" / ".[milvus]"
+```
+
+### Reranking (FlashRank)
+
+Cross-encoder reranking of the fused candidates, fully local:
+
+```toml
+[rerank]
+enabled = true
+model   = "ms-marco-MiniLM-L-12-v2"
+top_k   = 5
+```
+
+```bash
+pip install -e ".[rerank]"
+```
+
+### Semantic caching
+
+A local sqlite cache keyed by query embedding; a near-duplicate query within
+`threshold` cosine similarity reuses the prior answer:
+
+```toml
+[cache]
+enabled   = true
+threshold = 0.95
+```
+
+### Evaluation (`ragcore eval`)
+
+Retrieval+answer quality scored with **Ragas** (faithfulness, answer_relevancy,
+context_precision) and **TruLens** (groundedness, context_relevance,
+answer_relevance), judged by a **local Ollama** model via litellm — no cloud
+keys. The judge model is `[eval] judge_model` (default `ollama:qwen3:8b`; a
+non-reasoning instruct model such as `ollama:qwen2.5:7b-instruct` is much faster
+per metric).
+
+```bash
+pip install -e ".[eval]"
+surreal start --user root --pass root rocksdb:./data/db   # in another terminal
+ragcore ingest examples/ragcore_demo.md
+ragcore eval                                              # writes data/eval/report.json
+```
+
+### Test tiers
+
+- **Deterministic** (`pytest tests`): the full suite with stubbed judges and
+  fixed vectors; no Ollama required. SurrealDB-backed tests auto-skip if the
+  `surreal` binary is absent.
+- **Live** (`pytest tests/live -m live`): exercises the real Ollama path —
+  pluggable backends with real `nomic-embed-text` embeddings and the real
+  Ragas+TruLens judge. Auto-skipped unless `http://localhost:11434` is reachable
+  (gate in `tests/conftest.py`).
+
+### Skills demonstrated
+
+`file:line` artifacts for each capability. Live-verified entries were exercised
+against a local Ollama (qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by the
+`tests/live` tier; structural-only entries are covered by the deterministic suite.
+
+| Skill | Artifact | Verification |
+| --- | --- | --- |
+| Chroma backend | `ragcore/vectorstores/chroma_store.py:10` (`ChromaStore`); factory `ragcore/vectorstores/base.py:63` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:75` |
+| FAISS backend | `ragcore/vectorstores/faiss_store.py:18` (`FaissStore`); factory `ragcore/vectorstores/base.py:70` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:79` |
+| Milvus backend | `ragcore/vectorstores/milvus_store.py:20` (`MilvusStore`); factory `ragcore/vectorstores/base.py:76` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:83` |
+| Reranking (FlashRank) | `ragcore/rerank.py:7` (`rerank`); config `ragcore/config.py:51` | Structural — `tests/test_rerank.py` |
+| Semantic caching | `ragcore/cache.py:22` (`SemanticCache`); config `ragcore/config.py:57` | Structural — `tests/test_cache.py` |
+| Model evaluation | `ragcore/eval/harness.py:45` (`compute_metrics`); CLI `ragcore/cli.py:278` | Live — full 6-metric report from the local Ollama judge, all floats in [0,1] (`tests/live/test_live_rag_upgrade.py:88`, passing) |
+| Ragas | `ragcore/eval/harness.py:161` (`_score_ragas`) | Live (qwen2.5:7b-instruct) — faithfulness=1.0, answer_relevancy≈0.85, context_precision≈0.50 on a grounded record |
+| TruLens | `ragcore/eval/harness.py:173` (`_score_trulens`); litellm shim `ragcore/eval/harness.py:62` | Live (qwen2.5:7b-instruct) — groundedness=1.0, context_relevance=0.5, answer_relevance=1.0 on a grounded record |
+
+> Live-eval notes (Task 10): first real exercise of the `judge=None` path
+> surfaced three fixable mismatches, all fixed in `ragcore/eval/harness.py`:
+> (1) trulens-vs-litellm instrumentation crash on `litellm.CallTypes`
+> (`_patch_trulens_litellm_instrumentation`); (2) Ollama rejecting ragas'
+> `n`-sampling param (`litellm.drop_params = True`); (3) `answer_relevancy`
+> needing an embeddings model (wired from `[models.embedding]`). The
+> per-metric `LLM` judge calls are slow under a reasoning model (qwen3:8b);
+> use a non-reasoning instruct model for `ragcore eval`. The end-to-end
+> `ragcore eval` (which also runs the LangGraph answer step) can hit esperanto's
+> default Ollama HTTP read-timeout under qwen3:8b — independent of the metrics,
+> which are verified above.
+
 ## Web UI
 
 A thin local chat UI (FastAPI + one HTML page, no build step):
