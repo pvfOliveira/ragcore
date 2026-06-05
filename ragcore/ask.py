@@ -15,6 +15,7 @@ from ai_prompter import Prompter
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
+from ragcore.cache import SemanticCache
 from ragcore.providers import build_chat_model
 from ragcore.rerank import rerank
 from ragcore.retrieve import hybrid_search, vector_store_for
@@ -106,7 +107,37 @@ def _build_graph():
     return g.compile()
 
 
+_CACHE_PATH = str(Path(__file__).parent.parent / "data" / "semantic_cache.db")
+_cache: SemanticCache | None = None
+
+
+def _get_cache(config) -> SemanticCache:
+    global _cache
+    if _cache is None:
+        _cache = SemanticCache(path=_CACHE_PATH, threshold=config.cache.threshold)
+    return _cache
+
+
 async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    if config is not None and getattr(config, "cache", None) is not None and config.cache.enabled:
+        from ragcore.embedding import generate_embedding
+        q_emb = await generate_embedding(question, config)
+        cache = _get_cache(config)
+        hit = cache.get(q_emb)
+        if hit is not None:
+            return {"answer": hit["answer"], "citations": hit["sources"]}
+
+        graph = _build_graph()
+        result = await graph.ainvoke({
+            "question": question, "answers": [],
+            "_store": store, "_config": config, "_embedder_fn": embedder_fn,
+            "_force_cloud": force_cloud,
+        })
+        answer = result["answer"]
+        citations = result.get("citations", [])
+        cache.put(question, q_emb, answer=answer, sources=citations)
+        return {"answer": answer, "citations": citations}
+
     graph = _build_graph()
     result = await graph.ainvoke({
         "question": question, "answers": [],
