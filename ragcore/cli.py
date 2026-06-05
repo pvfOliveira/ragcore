@@ -9,7 +9,7 @@ import typer
 from ragcore.config import load_config
 from ragcore.embedding import generate_embedding
 from ragcore.ingest import ingest_source
-from ragcore.retrieve import hybrid_search
+from ragcore.retrieve import hybrid_search, vector_store_for
 from ragcore.store import Store
 
 app = typer.Typer(help="ragcore — local-first RAG")
@@ -178,7 +178,9 @@ def search(query: str, k: int = 5):
     """Hybrid search; print matching chunks."""
     try:
         cfg, store = _load()
-        results = asyncio.run(hybrid_search(store, _embedder(cfg), query, k=k))
+        results = asyncio.run(
+            hybrid_search(store, _embedder(cfg), query, k=k, vector_store=vector_store_for(cfg))
+        )
         for r in results:
             typer.echo(f"[{r['source']}] {r['content'][:120]}")
     except typer.Exit:
