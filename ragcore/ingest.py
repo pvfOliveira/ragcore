@@ -51,4 +51,16 @@ async def ingest_source(
         for i, (c, v) in enumerate(zip(chunks, vectors))
     ]
     await store.add_embeddings(source_id, rows)
+    # Mirror the embeddings into the configured pluggable vector backend, if any.
+    # SurrealDB (default) keeps being the source of truth and is never routed
+    # through an adapter; only non-surreal backends get a second write.
+    if config is not None and config.store.vector_backend != "surreal":
+        from ragcore.vectorstores.base import make_vector_store
+
+        vs = make_vector_store(config)
+        adapter_chunks = [
+            {"id": f"{source_id}:{r['order']}", "text": r["content"], "embedding": r["embedding"]}
+            for r in rows
+        ]
+        await vs.add_embeddings(source_id, adapter_chunks)
     return IngestResult(source_id=source_id, created=True)

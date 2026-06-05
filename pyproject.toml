@@ -22,6 +22,23 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.5", "httpx>=0.27"]
+rerank = ["flashrank>=0.2"]
+chroma = ["chromadb>=0.5"]
+faiss = ["faiss-cpu>=1.8"]
+milvus = ["pymilvus>=2.4", "milvus-lite>=2.4"]
+# ragas 0.4.x still imports langchain_community.chat_models.vertexai (removed in
+# langchain-community 0.4); pin <0.4 to keep that shim. trulens' transitive `munch`
+# imports pkg_resources, removed from setuptools>=81; pin setuptools<81. Neither
+# downgrades ragcore's langchain-core (stays 1.x) or langgraph.
+eval = [
+    "ragas>=0.2",
+    "trulens-core>=1.0",
+    "trulens-providers-litellm>=1.0",
+    "datasets>=2.0",
+    "langchain-community<0.4",
+    "setuptools<81",
+]
+rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval]"]
 
 [project.scripts]
 ragcore = "ragcore.cli:app"
@@ -39,6 +56,14 @@ include = ["ragcore*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# The live tier (tests/live) needs a real local Ollama and takes minutes; it is
+# opt-in. Run it explicitly with `pytest tests/live -m live`. The default
+# `pytest tests` stays deterministic (and the conftest gate skips live items
+# anyway when Ollama is unreachable).
+addopts = "--ignore=tests/live"
+markers = [
+    "live: tests needing a reachable local Ollama (skipped otherwise)",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]

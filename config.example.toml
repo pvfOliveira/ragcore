@@ -29,3 +29,23 @@ retry_base_seconds = 2
 
 [chat]
 history_window = 10
+
+[store]
+vector_backend = "surreal"   # surreal | chroma | faiss | milvus
+# Persistence locations for the pluggable backends (only the selected one is used):
+chroma_path = "data/chroma"
+faiss_path = "data/faiss"
+milvus_uri = "data/milvus.db"
+collection = "ragcore"
+
+[rerank]
+enabled = false
+model = "ms-marco-MiniLM-L-12-v2"
+top_k = 5
+
+[cache]
+enabled = false
+threshold = 0.95
+
+[eval]
+judge_model = "ollama:qwen3:8b"

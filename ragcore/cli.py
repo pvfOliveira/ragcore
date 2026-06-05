@@ -9,7 +9,7 @@ import typer
 from ragcore.config import load_config
 from ragcore.embedding import generate_embedding
 from ragcore.ingest import ingest_source
-from ragcore.retrieve import hybrid_search
+from ragcore.retrieve import hybrid_search, vector_store_for
 from ragcore.store import Store
 
 app = typer.Typer(help="ragcore — local-first RAG")
@@ -178,7 +178,9 @@ def search(query: str, k: int = 5):
     """Hybrid search; print matching chunks."""
     try:
         cfg, store = _load()
-        results = asyncio.run(hybrid_search(store, _embedder(cfg), query, k=k))
+        results = asyncio.run(
+            hybrid_search(store, _embedder(cfg), query, k=k, vector_store=vector_store_for(cfg))
+        )
         for r in results:
             typer.echo(f"[{r['source']}] {r['content'][:120]}")
     except typer.Exit:
@@ -267,6 +269,19 @@ def serve(host: str = typer.Option("127.0.0.1", "--host"),
         cfg = load_config(_state["config_path"])
         typer.echo(f"ragcore web UI on http://{host}:{port}  (local only, no auth)")
         uvicorn.run(create_app(cfg), host=host, port=port, log_level="info")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command("eval")
+def eval_cmd(dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset")):
+    """Evaluate retrieval+answer quality (Ragas + TruLens) with a local Ollama judge."""
+    try:
+        from ragcore.eval.harness import run_eval
+        cfg = load_config(_state["config_path"])
+        run_eval(cfg, dataset)
     except typer.Exit:
         raise
     except Exception as e:

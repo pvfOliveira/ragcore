@@ -44,6 +44,31 @@ class ChatConfig(BaseModel):
     history_window: int = 10
 
 
+class StoreConfig(BaseModel):
+    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus
+    # Persistence locations for the pluggable backends. Defaults live under the
+    # repo `data/` dir; only the selected backend's location is used.
+    chroma_path: str = "data/chroma"
+    faiss_path: str = "data/faiss"
+    milvus_uri: str = "data/milvus.db"
+    collection: str = "ragcore"
+
+
+class RerankConfig(BaseModel):
+    enabled: bool = False
+    model: str = "ms-marco-MiniLM-L-12-v2"
+    top_k: int = 5
+
+
+class CacheConfig(BaseModel):
+    enabled: bool = False
+    threshold: float = 0.95
+
+
+class EvalConfig(BaseModel):
+    judge_model: str = "ollama:qwen3:8b"
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -51,6 +76,10 @@ class Config(BaseModel):
     surreal: SurrealConfig = SurrealConfig()
     worker: WorkerConfig = WorkerConfig()
     chat: ChatConfig = ChatConfig()
+    store: StoreConfig = StoreConfig()
+    rerank: RerankConfig = RerankConfig()
+    cache: CacheConfig = CacheConfig()
+    eval: EvalConfig = EvalConfig()
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
@@ -70,4 +99,8 @@ def load_config(path: str | Path = "config.toml") -> Config:
         surreal=SurrealConfig(**data.get("surreal", {})),
         worker=WorkerConfig(**data.get("worker", {})),
         chat=ChatConfig(**data.get("chat", {})),
+        store=StoreConfig(**data.get("store", {})),
+        rerank=RerankConfig(**data.get("rerank", {})),
+        cache=CacheConfig(**data.get("cache", {})),
+        eval=EvalConfig(**data.get("eval", {})),
     )

@@ -1,0 +1,3 @@
+{"question": "What stores energy for the grid?", "ground_truth": "Grid-scale batteries store solar and wind energy."}
+{"question": "Why is grid storage needed?", "ground_truth": "To balance intermittent renewable supply with demand."}
+{"question": "Name a grid storage technology.", "ground_truth": "Lithium-ion batteries."}
