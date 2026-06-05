@@ -16,6 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from ragcore.providers import build_chat_model
+from ragcore.rerank import rerank
 from ragcore.retrieve import hybrid_search, vector_store_for
 from ragcore.routing import select_model
 
@@ -71,9 +72,12 @@ def _fan_out(state: AskState):
 
 async def _retrieve_answer(state: dict) -> dict:
     term = state["_term"]
-    vector_store = vector_store_for(state.get("_config"))
+    cfg = state.get("_config")
+    vector_store = vector_store_for(cfg)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
     chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, **extra)
+    if cfg is not None and cfg.rerank.enabled:
+        chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
     chat = _build_chat(state["_config"], force_cloud=state.get("_force_cloud", False))
     msg = await chat.ainvoke(prompt)
