@@ -152,10 +152,10 @@ against a local Ollama (qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by th
 | Skill | Artifact | Verification |
 | --- | --- | --- |
 | Chroma backend | `ragcore/vectorstores/chroma_store.py:10` (`ChromaStore`); factory `ragcore/vectorstores/base.py:63` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:75` |
-| FAISS backend | `ragcore/vectorstores/faiss_store.py:18` (`FaissStore`); factory `ragcore/vectorstores/base.py:70` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:79` |
-| Milvus backend | `ragcore/vectorstores/milvus_store.py:20` (`MilvusStore`); factory `ragcore/vectorstores/base.py:76` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:83` |
-| Reranking (FlashRank) | `ragcore/rerank.py:7` (`rerank`); config `ragcore/config.py:51` | Structural — `tests/test_rerank.py` |
-| Semantic caching | `ragcore/cache.py:22` (`SemanticCache`); config `ragcore/config.py:57` | Structural — `tests/test_cache.py` |
+| FAISS backend | `ragcore/vectorstores/faiss_store.py:18` (`FaissStore`); factory `ragcore/vectorstores/base.py:72` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:79` |
+| Milvus backend | `ragcore/vectorstores/milvus_store.py:20` (`MilvusStore`); factory `ragcore/vectorstores/base.py:77` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:83` |
+| Reranking (FlashRank) | `ragcore/rerank.py:7` (`rerank`); config `ragcore/config.py:57` | Structural — `tests/test_rerank.py` |
+| Semantic caching | `ragcore/cache.py:22` (`SemanticCache`); config `ragcore/config.py:63` | Structural — `tests/test_cache.py` |
 | Model evaluation | `ragcore/eval/harness.py:45` (`compute_metrics`); CLI `ragcore/cli.py:278` | Live — full 6-metric report from the local Ollama judge, all floats in [0,1] (`tests/live/test_live_rag_upgrade.py:88`, passing) |
 | Ragas | `ragcore/eval/harness.py:161` (`_score_ragas`) | Live (qwen2.5:7b-instruct) — faithfulness=1.0, answer_relevancy≈0.85, context_precision≈0.50 on a grounded record |
 | TruLens | `ragcore/eval/harness.py:173` (`_score_trulens`); litellm shim `ragcore/eval/harness.py:62` | Live (qwen2.5:7b-instruct) — groundedness=1.0, context_relevance=0.5, answer_relevance=1.0 on a grounded record |
