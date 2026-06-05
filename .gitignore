@@ -4,3 +4,5 @@ __pycache__/
 data/
 .venv/
 config.toml
+.idea/
+ragcore.egg-info/
