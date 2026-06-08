@@ -23,6 +23,10 @@ from itertools import product
 from typing import Any
 
 
+def _tok_per_s(eval_count: int, eval_duration_s: float) -> float:
+    return eval_count / eval_duration_s if eval_duration_s > 0 else 0.0
+
+
 def run_bench(
     client: Any,
     *,
@@ -52,7 +56,7 @@ def run_bench(
             )
             eval_count = result["eval_count"]
             eval_duration_s = result["eval_duration_s"]
-            tok_per_s = (eval_count / eval_duration_s) if eval_duration_s > 0 else 0.0
+            tok_per_s = _tok_per_s(eval_count, eval_duration_s)
             run = {
                 "num_ctx": ctx,
                 "num_batch": batch,
@@ -63,7 +67,7 @@ def run_bench(
             }
         else:
             # Fire conc concurrent generate calls; aggregate throughput + max latency
-            def _call(_ctx=ctx, _batch=batch, _conc=conc):
+            def _call(_ctx=ctx, _batch=batch):
                 return client.generate(
                     num_ctx=_ctx,
                     num_batch=_batch,
@@ -76,8 +80,7 @@ def run_bench(
                 results = [f.result() for f in as_completed(futures)]
 
             agg_tok_per_s = sum(
-                (r["eval_count"] / r["eval_duration_s"]) if r["eval_duration_s"] > 0 else 0.0
-                for r in results
+                _tok_per_s(r["eval_count"], r["eval_duration_s"]) for r in results
             )
             max_latency = max(r["total_latency_s"] for r in results)
             min_ttft = min(r["ttft_s"] for r in results)
@@ -91,6 +94,12 @@ def run_bench(
             }
 
         runs.append(run)
+
+    if not runs:
+        raise ValueError(
+            "run_bench: no parameter combinations to run "
+            "(num_ctx, num_batch, and concurrency must be non-empty)"
+        )
 
     best_throughput = max(runs, key=lambda r: r["tok_per_s"])
     best_latency = min(runs, key=lambda r: r["total_latency_s"])
@@ -115,9 +124,15 @@ class OllamaBenchClient:
       eval_duration       (int, ns) — time spent generating output tokens
     """
 
-    def __init__(self, model: str, base_url: str = "http://localhost:11434") -> None:
+    def __init__(
+        self,
+        model: str,
+        base_url: str = "http://localhost:11434",
+        timeout: int = 300,
+    ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
+        self.timeout = timeout
 
     def generate(
         self,
@@ -144,7 +159,7 @@ class OllamaBenchClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             data = json.loads(resp.read())
 
         total_duration_ns: int = data.get("total_duration", 0)
