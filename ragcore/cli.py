@@ -190,11 +190,33 @@ def retry(job_id: str):
         _fail(e)
 
 
+async def _image_search(query: str, k: int, store, embedder) -> list[dict]:
+    """CLIP text-encode the query and retrieve the nearest images."""
+    qv = embedder.embed_text(query)
+    return await store.search(qv, k)
+
+
 @app.command()
-def search(query: str, k: int = 5):
+def search(
+    query: str,
+    k: int = 5,
+    images: bool = typer.Option(False, "--images", help="Cross-modal image search (CLIP text->image)"),
+):
     """Hybrid search; print matching chunks."""
     try:
         cfg, store = _load()
+        if images:
+            from ragcore.multimodal import ClipEmbedder, ImageStore
+            embedder = ClipEmbedder(model_name=cfg.multimodal.model,
+                                    pretrained=cfg.multimodal.pretrained,
+                                    device=cfg.multimodal.device)
+            img_store = ImageStore(cfg.surreal)
+            hits = asyncio.run(_image_search(query, k, img_store, embedder))
+            if not hits:
+                typer.echo("No images found.")
+            for h in hits:
+                typer.echo(f"{h['path']}  ({h['similarity']:.3f})")
+            return
         results = asyncio.run(
             hybrid_search(store, _embedder(cfg), query, k=k, vector_store=vector_store_for(cfg), config=cfg)
         )
