@@ -275,7 +275,7 @@ def serve(host: str = typer.Option("127.0.0.1", "--host"),
         _fail(e)
 
 
-def _config_snapshot(cfg):
+def _config_snapshot(cfg) -> dict:
     return {"models": {k: v.local_model for k, v in cfg.models.items()},
             "routing": cfg.routing.model_dump(),
             "rerank": cfg.rerank.enabled, "cache": cfg.cache.enabled,
@@ -314,7 +314,8 @@ def runs_cmd():
         from ragcore.llmops.registry import RunRegistry
         rows = asyncio.run(RunRegistry(cfg.surreal).list_runs())
         for r in rows:
-            typer.echo(f"{r['id']}  tag={r['tag']}  {r['created']}  {r['metrics']}")
+            families = ", ".join(sorted(r["metrics"].keys())) if r["metrics"] else "-"
+            typer.echo(f"{r['id']}  tag={r['tag']}  {r['created']}  metrics=[{families}]")
     except typer.Exit:
         raise
     except Exception as e:

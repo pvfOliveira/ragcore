@@ -74,9 +74,7 @@ class RunRegistry:
     async def resolve(self, ref: str) -> Optional[dict]:
         """A run id (record link) -> that run; otherwise treat ref as a tag -> latest."""
         if ":" in ref:
-            got = await self.get(ref)
-            if got:
-                return got
+            return await self.get(ref)   # record-id ref resolves by id only
         db = self._connect()
         try:
             await self._signin(db)
