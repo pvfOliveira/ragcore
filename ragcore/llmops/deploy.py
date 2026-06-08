@@ -53,10 +53,7 @@ class DeploymentStore:
             history = (row.get("history") or []) if row else []
             if row and row.get("run_id"):
                 history = history + [row["run_id"]]
-            # Use CREATE then UPDATE pattern (existence-check + upsert via DELETE+CREATE)
-            # to handle the singleton record reliably on SurrealDB 3.1.2.
-            existing = self._rows(await db.query(f"SELECT id FROM {_PTR};"))
-            if existing:
+            if row:
                 await db.query(
                     f"UPDATE {_PTR} SET run_id=$rid, history=$h;",
                     {"rid": run_id, "h": history})
@@ -80,15 +77,9 @@ class DeploymentStore:
                 return None
             history = list(row["history"])
             prev = history.pop()
-            existing = self._rows(await db.query(f"SELECT id FROM {_PTR};"))
-            if existing:
-                await db.query(
-                    f"UPDATE {_PTR} SET run_id=$rid, history=$h;",
-                    {"rid": prev, "h": history})
-            else:
-                await db.query(
-                    f"CREATE {_PTR} SET run_id=$rid, history=$h;",
-                    {"rid": prev, "h": history})
+            await db.query(
+                f"UPDATE {_PTR} SET run_id=$rid, history=$h;",
+                {"rid": prev, "h": history})
             return prev
         except Exception as e:
             raise StoreError(f"rollback failed: {e}") from e

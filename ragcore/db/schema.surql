@@ -85,4 +85,4 @@ DEFINE FIELD IF NOT EXISTS created ON eval_run DEFAULT time::now() VALUE $before
 DEFINE TABLE IF NOT EXISTS deployment SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS run_id ON TABLE deployment TYPE string;
 DEFINE FIELD IF NOT EXISTS history ON TABLE deployment TYPE option<array<string>>;
-DEFINE FIELD IF NOT EXISTS updated ON deployment DEFAULT time::now() VALUE time::now();
+DEFINE FIELD IF NOT EXISTS updated ON deployment DEFAULT time::now() VALUE time::now();  -- always set to now on every write (updated-at)
