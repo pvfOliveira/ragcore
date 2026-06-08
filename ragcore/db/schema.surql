@@ -86,3 +86,13 @@ DEFINE TABLE IF NOT EXISTS deployment SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS run_id ON TABLE deployment TYPE string;
 DEFINE FIELD IF NOT EXISTS history ON TABLE deployment TYPE option<array<string>>;
 DEFINE FIELD IF NOT EXISTS updated ON deployment DEFAULT time::now() VALUE time::now();  -- always set to now on every write (updated-at)
+
+DEFINE TABLE IF NOT EXISTS entity SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS name ON TABLE entity TYPE string;
+DEFINE FIELD IF NOT EXISTS norm ON TABLE entity TYPE string;        -- lowercased dedup key
+DEFINE FIELD IF NOT EXISTS sources ON TABLE entity TYPE option<array<string>>;
+DEFINE INDEX IF NOT EXISTS idx_entity_norm ON TABLE entity COLUMNS norm UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS relates TYPE RELATION SCHEMALESS;        -- RELATE edge table
+DEFINE FIELD IF NOT EXISTS predicate ON TABLE relates TYPE string;
+DEFINE FIELD IF NOT EXISTS sources ON TABLE relates TYPE option<array<string>>;

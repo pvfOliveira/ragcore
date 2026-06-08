@@ -1,0 +1,7 @@
+Extract the key entities and their relationships from the text below.
+Return ONLY valid JSON, no prose, in exactly this shape:
+{"triples": [{"subject": "<entity>", "predicate": "<relation>", "object": "<entity>"}]}
+Entities are short noun phrases. If there are no clear relationships, return {"triples": []}.
+
+Text:
+{{ chunk }}

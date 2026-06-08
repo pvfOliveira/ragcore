@@ -63,4 +63,18 @@ async def ingest_source(
             for r in rows
         ]
         await vs.add_embeddings(source_id, adapter_chunks)
+    # Graph extraction: extract entity/relation triples from each chunk and persist
+    # them as a native SurrealDB graph. Opt-in via config.graph.enabled (default False).
+    # Failures here must NEVER fail ingestion.
+    if config is not None and getattr(config, "graph", None) is not None and config.graph.enabled:
+        from ragcore.graph import GraphStore, _chat_fn, extract_triples
+        chat_fn = _chat_fn(config)
+        gstore = GraphStore(config.surreal)
+        for chunk in chunks:
+            try:
+                triples = await extract_triples(chunk, chat_fn)
+                if triples:
+                    await gstore.upsert_triples(source_id, triples)
+            except Exception:
+                pass  # extraction/graph failures must NEVER fail ingestion
     return IngestResult(source_id=source_id, created=True)
