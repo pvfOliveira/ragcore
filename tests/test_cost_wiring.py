@@ -4,7 +4,7 @@ import pytest
 from ragcore import ask as ask_mod
 from ragcore.ask import answer_question
 from ragcore.chunking import token_count
-from ragcore.config import Config, CostConfig, ModelRole
+from ragcore.config import CacheConfig, Config, CostConfig, ModelRole
 from ragcore.cost.ledger import CostLedger
 
 FIXED_ANSWER = "This is the synthesized answer."
@@ -79,6 +79,57 @@ async def test_cost_disabled_no_ledger_write(tmp_path, monkeypatch):
     assert not os.path.exists(ledger_path), "Ledger file must NOT be created when cost disabled"
 
 
+async def test_cost_cache_hit_records_cached_row(tmp_path, monkeypatch):
+    """Cache-hit branch records cached=True with zero prompt/completion tokens."""
+    ledger_path = str(tmp_path / "cost_cache_hit.db")
+    config = Config(
+        models={
+            "chat": ModelRole(local_provider="ollama", local_model="qwen2.5:7b-instruct"),
+            "embedding": ModelRole(local_provider="ollama", local_model="nomic-embed-text"),
+        },
+        cost=CostConfig(enabled=True, ledger_path=ledger_path),
+        cache=CacheConfig(enabled=True, threshold=0.95),
+    )
+    ask_mod._ledger.clear()
+
+    # Stub generate_embedding so we don't hit Ollama.
+    FAKE_EMB = [0.1, 0.2, 0.3]
+
+    async def fake_generate_embedding(question, cfg):
+        return FAKE_EMB
+
+    import ragcore.embedding as emb_mod
+    monkeypatch.setattr(emb_mod, "generate_embedding", fake_generate_embedding)
+
+    # Stub _get_cache to return a fake cache that always reports a hit.
+    class FakeCache:
+        def get(self, embedding):
+            return {"answer": "cached ans", "sources": ["doc:cache"]}
+
+        def put(self, *args, **kwargs):
+            pass
+
+    monkeypatch.setattr(ask_mod, "_get_cache", lambda cfg: FakeCache())
+
+    result = await answer_question(
+        "What is caching?",
+        store=object(),
+        config=config,
+        embedder_fn=None,
+    )
+    assert result["answer"] == "cached ans"
+    assert result["citations"] == ["doc:cache"]
+
+    ledger = CostLedger(path=ledger_path)
+    agg = ledger.aggregate()
+
+    assert agg["totals"]["requests"] == 1
+    assert agg["cache"]["hits"] == 1
+    assert agg["cache"]["misses"] == 0
+    assert agg["totals"]["prompt_tokens"] == 0
+    assert agg["totals"]["completion_tokens"] == 0
+
+
 async def test_budget_enforcement_raises(cost_config):
     """When enforce=True and question exceeds budget, RagcoreError is raised."""
     from ragcore.config import CostConfig
@@ -95,7 +146,7 @@ async def test_budget_enforcement_raises(cost_config):
     )
     ask_mod._ledger.clear()
 
-    with pytest.raises(RagcoreError, match="token budget"):
+    with pytest.raises(RagcoreError, match="exceeds budget"):
         await answer_question(
             "This question has more than one token.",
             store=object(),

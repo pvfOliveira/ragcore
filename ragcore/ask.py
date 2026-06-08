@@ -110,7 +110,7 @@ def _build_graph():
 _CACHE_PATH = str(Path(__file__).parent.parent / "data" / "semantic_cache.db")
 _cache: SemanticCache | None = None
 
-_ledger: dict = {}  # keyed by ledger_path
+_ledger: dict[str, Any] = {}  # keyed by ledger_path
 
 
 def _get_cache(config) -> SemanticCache:
@@ -129,6 +129,21 @@ def _get_ledger(config):
     return _ledger[path]
 
 
+def _record_usage(config, question: str, answer: str, *, cached: bool,
+                  force_cloud: bool = False) -> None:
+    """Record one usage row when cost tracking is enabled; no-op otherwise."""
+    if config is None or getattr(config, "cost", None) is None or not config.cost.enabled:
+        return
+    from ragcore.chunking import token_count
+    provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
+    _get_ledger(config).record(
+        role="chat", provider=provider, model=model,
+        prompt_tokens=0 if cached else token_count(question),
+        completion_tokens=0 if cached else token_count(answer),
+        cached=cached,
+    )
+
+
 async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
     # Budget enforcement: check BEFORE any LLM call.
     if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
@@ -139,7 +154,7 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
 
             if over_budget(token_count(question), config.cost.budget_tokens):
                 raise RagcoreError(
-                    f"request exceeds token budget ({config.cost.budget_tokens})"
+                    f"request of {token_count(question)} tokens exceeds budget ({config.cost.budget_tokens})"
                 )
 
     if config is not None and getattr(config, "cache", None) is not None and config.cache.enabled:
@@ -148,16 +163,7 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         cache = _get_cache(config)
         hit = cache.get(q_emb)
         if hit is not None:
-            if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
-                provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
-                _get_ledger(config).record(
-                    role="chat",
-                    provider=provider,
-                    model=model,
-                    prompt_tokens=0,
-                    completion_tokens=0,
-                    cached=True,
-                )
+            _record_usage(config, question, "", cached=True, force_cloud=force_cloud)
             return {"answer": hit["answer"], "citations": hit["sources"]}
 
         graph = _build_graph()
@@ -169,18 +175,7 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         answer = result["answer"]
         citations = result.get("citations", [])
         cache.put(question, q_emb, answer=answer, sources=citations)
-        if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
-            from ragcore.chunking import token_count
-
-            provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
-            _get_ledger(config).record(
-                role="chat",
-                provider=provider,
-                model=model,
-                prompt_tokens=token_count(question),
-                completion_tokens=token_count(answer),
-                cached=False,
-            )
+        _record_usage(config, question, answer, cached=False, force_cloud=force_cloud)
         return {"answer": answer, "citations": citations}
 
     graph = _build_graph()
@@ -191,16 +186,5 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
     })
     answer = result["answer"]
     citations = result.get("citations", [])
-    if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
-        from ragcore.chunking import token_count
-
-        provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
-        _get_ledger(config).record(
-            role="chat",
-            provider=provider,
-            model=model,
-            prompt_tokens=token_count(question),
-            completion_tokens=token_count(answer),
-            cached=False,
-        )
+    _record_usage(config, question, answer, cached=False, force_cloud=force_cloud)
     return {"answer": answer, "citations": citations}
