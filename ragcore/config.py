@@ -69,6 +69,38 @@ class EvalConfig(BaseModel):
     judge_model: str = "ollama:qwen3:8b"
 
 
+class LlmopsConfig(BaseModel):
+    tolerance: float = 0.05          # max allowed metric regression vs baseline
+    drift_threshold: float = 0.15    # cosine-distance drift that fails `drift`
+
+
+class CostConfig(BaseModel):
+    enabled: bool = False            # record usage into the ledger
+    enforce: bool = False            # block requests over budget (else warn only)
+    budget_tokens: int = 0           # 0 = no budget
+    ledger_path: str = "data/cost.db"
+    rates: dict[str, float] = {}     # "provider:model" -> USD per 1k tokens (local omitted = 0)
+
+
+class BenchConfig(BaseModel):
+    num_ctx: list[int] = [2048, 4096]
+    num_batch: list[int] = [128, 256]
+    concurrency: list[int] = [1, 2, 4]
+    keep_alive: str = "5m"
+    prompt: str = "Summarize the theory of relativity in three sentences."
+
+
+class GraphConfig(BaseModel):
+    enabled: bool = False
+    hops: int = 1                    # traversal depth at query time
+
+
+class MultimodalConfig(BaseModel):
+    model: str = "ViT-B-32"
+    pretrained: str = "laion2b_s34b_b79k"
+    device: str = "mps"
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -80,6 +112,11 @@ class Config(BaseModel):
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
     eval: EvalConfig = EvalConfig()
+    llmops: LlmopsConfig = LlmopsConfig()
+    cost: CostConfig = CostConfig()
+    bench: BenchConfig = BenchConfig()
+    graph: GraphConfig = GraphConfig()
+    multimodal: MultimodalConfig = MultimodalConfig()
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
@@ -103,4 +140,9 @@ def load_config(path: str | Path = "config.toml") -> Config:
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
         eval=EvalConfig(**data.get("eval", {})),
+        llmops=LlmopsConfig(**data.get("llmops", {})),
+        cost=CostConfig(**data.get("cost", {})),
+        bench=BenchConfig(**data.get("bench", {})),
+        graph=GraphConfig(**data.get("graph", {})),
+        multimodal=MultimodalConfig(**data.get("multimodal", {})),
     )
