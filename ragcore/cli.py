@@ -181,7 +181,7 @@ def search(query: str, k: int = 5):
     try:
         cfg, store = _load()
         results = asyncio.run(
-            hybrid_search(store, _embedder(cfg), query, k=k, vector_store=vector_store_for(cfg))
+            hybrid_search(store, _embedder(cfg), query, k=k, vector_store=vector_store_for(cfg), config=cfg)
         )
         for r in results:
             typer.echo(f"[{r['source']}] {r['content'][:120]}")
@@ -484,6 +484,46 @@ def models():
         if spec.cloud_model:
             line += f"  cloud={spec.cloud_provider}/{spec.cloud_model}"
         typer.echo(line)
+
+
+graph_app = typer.Typer(help="Knowledge-graph commands.")
+app.add_typer(graph_app, name="graph")
+
+
+@graph_app.command(name="build")
+def graph_build():
+    """Back-fill the knowledge graph over already-ingested sources (skips already-graphed sources)."""
+    try:
+        from ragcore.graph import GraphStore, _chat_fn, extract_triples
+
+        cfg, store = _load()
+        sources = asyncio.run(store.list_sources())
+        if not sources:
+            typer.echo("No sources ingested — nothing to graph.")
+            return
+        gs = GraphStore(cfg.surreal)
+        chat = _chat_fn(cfg)
+        for s in sources:
+            sid = s["id"]
+            already = asyncio.run(gs.has_source(sid))
+            if already:
+                typer.echo(f"skipped {sid} (already graphed)")
+                continue
+            chunks = asyncio.run(store.get_chunks(sid))
+            if not chunks:
+                typer.echo(f"skipped {sid} (no chunks)")
+                continue
+            total_triples = 0
+            for chunk in chunks:
+                triples = asyncio.run(extract_triples(chunk, chat))
+                if triples:
+                    asyncio.run(gs.upsert_triples(sid, triples))
+                    total_triples += len(triples)
+            typer.echo(f"graphed {sid} ({total_triples} triples)")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
 
 
 cost_app = typer.Typer(help="Cost ledger and spend reporting.")

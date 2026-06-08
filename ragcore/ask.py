@@ -76,7 +76,7 @@ async def _retrieve_answer(state: dict) -> dict:
     cfg = state.get("_config")
     vector_store = vector_store_for(cfg)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
-    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, **extra)
+    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})

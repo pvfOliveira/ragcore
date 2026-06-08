@@ -215,6 +215,24 @@ class GraphStore:
         finally:
             await db.close()
 
+    async def has_source(self, source_id: str) -> bool:
+        """Return True if any entity record lists this source_id in its sources array.
+
+        Used by `graph build` to skip already-graphed sources.
+        """
+        db = self._connect()
+        try:
+            await self._signin(db)
+            rows = self._rows(await db.query(
+                "SELECT id FROM entity WHERE $src IN sources LIMIT 1;",
+                {"src": source_id},
+            ))
+            return len(rows) > 0
+        except Exception as e:
+            raise StoreError(f"has_source failed: {e}") from e
+        finally:
+            await db.close()
+
     async def edge_count(self, subj_name: str, obj_name: str) -> int:
         """Return the number of relates edges between two entities (by name).
 
@@ -246,3 +264,91 @@ class GraphStore:
             raise StoreError(f"edge_count failed: {e}") from e
         finally:
             await db.close()
+
+
+# ---------------------------------------------------------------------------
+# Graph-augmented retrieval helper
+# ---------------------------------------------------------------------------
+
+async def graph_context(config, query: str, k: int = 10) -> list[dict]:
+    """Return chunks connected (in the KG) to entities mentioned in the query.
+
+    Seeds are entities whose ``norm`` appears in the lowercased query string.
+    For each seed (and its neighbors up to config.graph.hops), collect the
+    linked source IDs, then fetch the corresponding source_embedding rows.
+
+    Returns [] when the graph is empty, no seed is found, or on any error —
+    never raises fatally so a graph problem cannot break retrieval.
+    """
+    try:
+        gs = GraphStore(config.surreal)
+        db = gs._connect()
+        try:
+            await gs._signin(db)
+
+            # 1. Find seed entities whose norm appears in the lowercased query
+            seeds = gs._rows(await db.query(
+                "SELECT id, norm, sources FROM entity WHERE string::lowercase($q) CONTAINS norm;",
+                {"q": query},
+            ))
+            if not seeds:
+                return []
+
+            # 2. Collect source IDs from seeds
+            all_source_ids: set[str] = set()
+            for seed in seeds:
+                for sid in (seed.get("sources") or []):
+                    if sid:
+                        all_source_ids.add(str(sid))
+
+            # 3. For each seed, traverse neighbors and collect their source IDs
+            hops = getattr(getattr(config, "graph", None), "hops", 1)
+            for seed in seeds:
+                seed_id = seed["id"]
+                traversal = "->relates->entity" * hops
+                nb_rows = gs._rows(await db.query(
+                    f"SELECT {traversal}.sources AS neighbor_sources FROM $src;",
+                    {"src": seed_id},
+                ))
+                for row in nb_rows:
+                    ns = row.get("neighbor_sources") or []
+                    for item in ns:
+                        if isinstance(item, list):
+                            for sid in item:
+                                if sid:
+                                    all_source_ids.add(str(sid))
+                        elif item:
+                            all_source_ids.add(str(item))
+
+            if not all_source_ids:
+                return []
+
+            # 4. Convert string IDs to RecordIDs for the IN filter
+            src_rids = []
+            for sid in all_source_ids:
+                try:
+                    src_rids.append(RecordID.parse(sid))
+                except Exception:
+                    pass
+
+            if not src_rids:
+                return []
+
+            # 5. Fetch chunk rows for those sources
+            rows = gs._rows(await db.query(
+                "SELECT id, source, content FROM source_embedding WHERE source IN $srcs LIMIT $k;",
+                {"srcs": src_rids, "k": k},
+            ))
+            return [
+                {
+                    "id": str(r["id"]),
+                    "source": str(r["source"]),
+                    "content": r.get("content", ""),
+                }
+                for r in rows
+            ]
+        finally:
+            await db.close()
+    except Exception as e:
+        logger.debug("graph_context failed (non-fatal): %s", e)
+        return []
