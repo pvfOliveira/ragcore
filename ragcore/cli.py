@@ -56,6 +56,13 @@ def init():
         _fail(e)
 
 
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+
+
+def _is_image_path(source: str) -> bool:
+    return Path(source).suffix.lower() in _IMAGE_EXTENSIONS
+
+
 @app.command()
 def ingest(
     source: str,
@@ -64,6 +71,11 @@ def ingest(
     """Ingest a file path or URL (skips if the same origin was already ingested)."""
     try:
         cfg, store = _load()
+        if _is_image_path(source):
+            from ragcore.multimodal import ingest_image
+            image_id = asyncio.run(ingest_image(source, cfg))
+            typer.echo(f"Ingested image {source} as {image_id}")
+            return
         if is_async:
             from ragcore.jobs import JobQueue
             res = asyncio.run(JobQueue(cfg.surreal).enqueue(source))

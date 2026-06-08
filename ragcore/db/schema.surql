@@ -96,3 +96,18 @@ DEFINE INDEX IF NOT EXISTS idx_entity_norm ON TABLE entity COLUMNS norm UNIQUE;
 DEFINE TABLE IF NOT EXISTS relates TYPE RELATION SCHEMALESS;        -- RELATE edge table
 DEFINE FIELD IF NOT EXISTS predicate ON TABLE relates TYPE string;
 DEFINE FIELD IF NOT EXISTS sources ON TABLE relates TYPE option<array<string>>;
+
+DEFINE TABLE IF NOT EXISTS image_embedding SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS origin ON TABLE image_embedding TYPE string;
+DEFINE FIELD IF NOT EXISTS path ON TABLE image_embedding TYPE string;
+DEFINE FIELD IF NOT EXISTS embedding ON TABLE image_embedding TYPE array<float>;
+
+DEFINE FUNCTION IF NOT EXISTS fn::image_search($query: array<float>, $k: int) {
+    RETURN (
+        SELECT id, origin, path,
+               vector::similarity::cosine(embedding, $query) AS similarity
+        FROM image_embedding
+        ORDER BY similarity DESC
+        LIMIT $k
+    );
+};
