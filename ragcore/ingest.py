@@ -1,12 +1,15 @@
 """Synchronous ingestion: extract -> chunk -> embed -> store."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from content_core import extract_content
 
 from ragcore.chunking import chunk_text
 from ragcore.embedding import generate_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -63,4 +66,18 @@ async def ingest_source(
             for r in rows
         ]
         await vs.add_embeddings(source_id, adapter_chunks)
+    # Graph extraction: extract entity/relation triples from each chunk and persist
+    # them as a native SurrealDB graph. Opt-in via config.graph.enabled (default False).
+    # Failures here must NEVER fail ingestion.
+    if config is not None and getattr(config, "graph", None) is not None and config.graph.enabled:
+        from ragcore.graph import GraphStore, _chat_fn, extract_triples
+        chat_fn = _chat_fn(config)
+        gstore = GraphStore(config.surreal)
+        for chunk in chunks:
+            try:
+                triples = await extract_triples(chunk, chat_fn)
+                if triples:
+                    await gstore.upsert_triples(source_id, triples)
+            except Exception as e:
+                logger.warning("graph extraction failed for a chunk in %s: %s", source_id, e)
     return IngestResult(source_id=source_id, created=True)

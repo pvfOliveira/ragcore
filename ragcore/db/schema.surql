@@ -73,3 +73,42 @@ DEFINE FIELD IF NOT EXISTS created ON chat_message DEFAULT time::now() VALUE $be
 DEFINE EVENT IF NOT EXISTS chat_session_delete ON TABLE chat_session WHEN ($after == NONE) THEN {
     DELETE chat_message WHERE session == $before.id;
 };
+
+DEFINE TABLE IF NOT EXISTS eval_run SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS tag ON TABLE eval_run TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS dataset ON TABLE eval_run TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS config_snapshot ON TABLE eval_run TYPE string;
+DEFINE FIELD IF NOT EXISTS metrics ON TABLE eval_run TYPE string;
+DEFINE FIELD IF NOT EXISTS gate_passed ON TABLE eval_run TYPE option<bool>;
+DEFINE FIELD IF NOT EXISTS created ON eval_run DEFAULT time::now() VALUE $before OR time::now();
+
+DEFINE TABLE IF NOT EXISTS deployment SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS run_id ON TABLE deployment TYPE string;
+DEFINE FIELD IF NOT EXISTS history ON TABLE deployment TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS updated ON deployment DEFAULT time::now() VALUE time::now();  -- always set to now on every write (updated-at)
+
+DEFINE TABLE IF NOT EXISTS entity SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS name ON TABLE entity TYPE string;
+DEFINE FIELD IF NOT EXISTS norm ON TABLE entity TYPE string;        -- lowercased dedup key
+DEFINE FIELD IF NOT EXISTS sources ON TABLE entity TYPE option<array<string>>;
+DEFINE INDEX IF NOT EXISTS idx_entity_norm ON TABLE entity COLUMNS norm UNIQUE;
+
+DEFINE TABLE IF NOT EXISTS relates TYPE RELATION SCHEMALESS;        -- RELATE edge table
+DEFINE FIELD IF NOT EXISTS predicate ON TABLE relates TYPE string;
+DEFINE FIELD IF NOT EXISTS sources ON TABLE relates TYPE option<array<string>>;
+
+DEFINE TABLE IF NOT EXISTS image_embedding SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS origin ON TABLE image_embedding TYPE string;
+DEFINE FIELD IF NOT EXISTS path ON TABLE image_embedding TYPE string;
+DEFINE FIELD IF NOT EXISTS embedding ON TABLE image_embedding TYPE array<float>;
+DEFINE INDEX IF NOT EXISTS idx_image_origin ON TABLE image_embedding COLUMNS origin UNIQUE;
+
+DEFINE FUNCTION IF NOT EXISTS fn::image_search($query: array<float>, $k: int) {
+    RETURN (
+        SELECT id, origin, path,
+               vector::similarity::cosine(embedding, $query) AS similarity
+        FROM image_embedding
+        ORDER BY similarity DESC
+        LIMIT $k
+    );
+};

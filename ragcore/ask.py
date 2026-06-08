@@ -76,7 +76,7 @@ async def _retrieve_answer(state: dict) -> dict:
     cfg = state.get("_config")
     vector_store = vector_store_for(cfg)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
-    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, **extra)
+    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
@@ -110,6 +110,8 @@ def _build_graph():
 _CACHE_PATH = str(Path(__file__).parent.parent / "data" / "semantic_cache.db")
 _cache: SemanticCache | None = None
 
+_ledger: dict[str, Any] = {}  # keyed by ledger_path
+
 
 def _get_cache(config) -> SemanticCache:
     global _cache
@@ -118,13 +120,50 @@ def _get_cache(config) -> SemanticCache:
     return _cache
 
 
+def _get_ledger(config):
+    from ragcore.cost.ledger import CostLedger
+
+    path = config.cost.ledger_path
+    if path not in _ledger:
+        _ledger[path] = CostLedger(path=path)
+    return _ledger[path]
+
+
+def _record_usage(config, question: str, answer: str, *, cached: bool,
+                  force_cloud: bool = False) -> None:
+    """Record one usage row when cost tracking is enabled; no-op otherwise."""
+    if config is None or getattr(config, "cost", None) is None or not config.cost.enabled:
+        return
+    from ragcore.chunking import token_count
+    provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
+    _get_ledger(config).record(
+        role="chat", provider=provider, model=model,
+        prompt_tokens=0 if cached else token_count(question),
+        completion_tokens=0 if cached else token_count(answer),
+        cached=cached,
+    )
+
+
 async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    # Budget enforcement: check BEFORE any LLM call.
+    if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
+        if config.cost.enforce:
+            from ragcore.chunking import token_count
+            from ragcore.cost.ledger import over_budget
+            from ragcore.errors import RagcoreError
+
+            if over_budget(token_count(question), config.cost.budget_tokens):
+                raise RagcoreError(
+                    f"request of {token_count(question)} tokens exceeds budget ({config.cost.budget_tokens})"
+                )
+
     if config is not None and getattr(config, "cache", None) is not None and config.cache.enabled:
         from ragcore.embedding import generate_embedding
         q_emb = await generate_embedding(question, config)
         cache = _get_cache(config)
         hit = cache.get(q_emb)
         if hit is not None:
+            _record_usage(config, question, "", cached=True, force_cloud=force_cloud)
             return {"answer": hit["answer"], "citations": hit["sources"]}
 
         graph = _build_graph()
@@ -136,6 +175,7 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         answer = result["answer"]
         citations = result.get("citations", [])
         cache.put(question, q_emb, answer=answer, sources=citations)
+        _record_usage(config, question, answer, cached=False, force_cloud=force_cloud)
         return {"answer": answer, "citations": citations}
 
     graph = _build_graph()
@@ -144,4 +184,7 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         "_store": store, "_config": config, "_embedder_fn": embedder_fn,
         "_force_cloud": force_cloud,
     })
-    return {"answer": result["answer"], "citations": result.get("citations", [])}
+    answer = result["answer"]
+    citations = result.get("citations", [])
+    _record_usage(config, question, answer, cached=False, force_cloud=force_cloud)
+    return {"answer": answer, "citations": citations}

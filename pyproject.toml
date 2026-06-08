@@ -38,7 +38,8 @@ eval = [
     "langchain-community<0.4",
     "setuptools<81",
 ]
-rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval]"]
+multimodal = ["open_clip_torch>=2.24", "torch>=2.2", "pillow>=10"]
+rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval,multimodal]"]
 
 [project.scripts]
 ragcore = "ragcore.cli:app"

@@ -6,3 +6,6 @@ data/
 config.toml
 .idea/
 ragcore.egg-info/
+
+# SurrealDB CLI REPL history (created by `surreal sql` during dev)
+history.txt

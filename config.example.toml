@@ -49,3 +49,31 @@ threshold = 0.95
 
 [eval]
 judge_model = "ollama:qwen3:8b"
+
+[llmops]
+tolerance = 0.05          # max allowed metric regression vs baseline
+drift_threshold = 0.15    # cosine-distance drift that fails `drift`
+
+[cost]
+enabled = false           # record usage into the ledger
+enforce = false           # block requests over budget (else warn only)
+budget_tokens = 0         # 0 = no budget
+ledger_path = "data/cost.db"
+# [cost.rates]            # "provider:model" -> USD per 1k tokens (local omitted = 0)
+# "anthropic:claude" = 3.0
+
+[bench]
+num_ctx = [2048, 4096]
+num_batch = [128, 256]
+concurrency = [1, 2, 4]
+keep_alive = "5m"
+prompt = "Summarize the theory of relativity in three sentences."
+
+[graph]
+enabled = false           # enable graph-RAG traversal at query time
+hops = 1                  # traversal depth
+
+[multimodal]
+model = "ViT-B-32"        # open_clip model name (requires ragcore[multimodal])
+pretrained = "laion2b_s34b_b79k"
+device = "mps"            # mps | cuda | cpu

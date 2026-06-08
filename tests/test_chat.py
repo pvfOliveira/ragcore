@@ -46,7 +46,7 @@ class FakeSessionStore:
 
 @pytest.fixture(autouse=True)
 def patch_hybrid(monkeypatch):
-    async def fake_hybrid(store, embedder_fn, query, k=10):
+    async def fake_hybrid(store, embedder_fn, query, k=10, **kwargs):
         return [{"id": "source_embedding:1", "source": "source:0", "content": "ctx"}]
     monkeypatch.setattr(chat_mod, "hybrid_search", fake_hybrid)
 
@@ -90,7 +90,7 @@ async def test_blank_reformulation_falls_back_to_raw_message(monkeypatch):
                         lambda config, content="", force_cloud=False: chat)
     captured = {}
 
-    async def cap_hybrid(store, embedder_fn, query, k=10):
+    async def cap_hybrid(store, embedder_fn, query, k=10, **kwargs):
         captured["query"] = query
         return [{"id": "e:1", "source": "source:0", "content": "ctx"}]
 

@@ -26,6 +26,16 @@ def reciprocal_rank_fusion(
     return fused
 
 
+def fuse_with_graph(
+    vector: list[dict[str, Any]],
+    bm25: list[dict[str, Any]],
+    graph: list[dict[str, Any]],
+    k: int = 10,
+) -> list[dict[str, Any]]:
+    """Fuse vector + BM25 + graph-connected chunks via RRF (graph is the 3rd signal)."""
+    return reciprocal_rank_fusion([vector, bm25, graph], key="id", k=60)[:k]
+
+
 def _adapter_hit_to_ragcore(hit: dict[str, Any]) -> dict[str, Any]:
     """Bridge an adapter result ``{"id","text","score"}`` to ragcore's chunk
     shape. RRF fuses on ``id``; downstream generation reads ``content`` and
@@ -51,7 +61,7 @@ def vector_store_for(config) -> Any | None:
     return make_vector_store(config)
 
 
-async def hybrid_search(store, embedder_fn, query: str, k: int = 10, vector_store=None):
+async def hybrid_search(store, embedder_fn, query: str, k: int = 10, vector_store=None, config=None):
     """Run vector + full-text search and fuse with RRF.
 
     `embedder_fn(query) -> list[float]` produces the query embedding.
@@ -61,6 +71,10 @@ async def hybrid_search(store, embedder_fn, query: str, k: int = 10, vector_stor
     pluggable backend (adapter-shaped results are bridged to ragcore's chunk
     shape); otherwise it comes from `store` (default, byte-identical behavior).
     The BM25 ranking always comes from `store.text_search`.
+
+    When `config` is provided and `config.graph.enabled` is True, a third
+    ranking signal is added from the knowledge graph via graph_context, and
+    all three are fused with RRF via fuse_with_graph.
     """
     query_vec = await embedder_fn(query)
     if vector_store is not None:
@@ -69,4 +83,8 @@ async def hybrid_search(store, embedder_fn, query: str, k: int = 10, vector_stor
     else:
         vres = await store.vector_search(query_vec, k=k)
     tres = await store.text_search(query, k=k)
+    if config is not None and getattr(config, "graph", None) is not None and config.graph.enabled:
+        from ragcore.graph import graph_context
+        gres = await graph_context(config, query, k=k)
+        return fuse_with_graph(vres, tres, gres, k=k)
     return reciprocal_rank_fusion([vres, tres], key="id", k=60)[:k]

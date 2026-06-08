@@ -38,7 +38,7 @@ async def test_fanout_accumulates_one_answer_per_search(monkeypatch):
     monkeypatch.setattr(ask_mod, "_build_chat",
                         lambda config, content="", force_cloud=False: chat)
 
-    async def fake_hybrid(store, embedder_fn, query, k=10):
+    async def fake_hybrid(store, embedder_fn, query, k=10, **kwargs):
         return [{"id": "source_embedding:1", "source": "source:0", "content": "ctx"}]
 
     monkeypatch.setattr(ask_mod, "hybrid_search", fake_hybrid)

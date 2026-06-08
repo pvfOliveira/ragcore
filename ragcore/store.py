@@ -145,6 +145,26 @@ class Store:
         finally:
             await db.close()
 
+    async def get_chunks(self, source_id: str) -> list[str]:
+        """Return the content strings of all source_embedding rows for a source.
+
+        Used by `graph build` to extract chunk texts without re-ingesting.
+        """
+        src = RecordID.parse(source_id)
+        db = self._connect()
+        try:
+            await self._signin(db)
+            rows = await db.query(
+                "SELECT content FROM source_embedding WHERE source = $src ORDER BY `order` ASC;",
+                {"src": src},
+            )
+            result = rows if isinstance(rows, list) else (rows or [])
+            return [r["content"] for r in result if r.get("content")]
+        except Exception as e:
+            raise StoreError(f"get_chunks failed: {e}") from e
+        finally:
+            await db.close()
+
     async def vector_search(self, query: list[float], k: int = 10) -> list[dict[str, Any]]:
         return await self._call_fn("fn::vector_search($q, $k)", {"q": query, "k": k})
 
