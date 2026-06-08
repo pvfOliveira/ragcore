@@ -1,12 +1,15 @@
 """Synchronous ingestion: extract -> chunk -> embed -> store."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from content_core import extract_content
 
 from ragcore.chunking import chunk_text
 from ragcore.embedding import generate_embeddings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -75,6 +78,6 @@ async def ingest_source(
                 triples = await extract_triples(chunk, chat_fn)
                 if triples:
                     await gstore.upsert_triples(source_id, triples)
-            except Exception:
-                pass  # extraction/graph failures must NEVER fail ingestion
+            except Exception as e:
+                logger.warning("graph extraction failed for a chunk in %s: %s", source_id, e)
     return IngestResult(source_id=source_id, created=True)

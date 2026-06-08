@@ -5,6 +5,7 @@ Opt-in via config.graph.enabled (default False).
 from __future__ import annotations
 
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Callable, Coroutine
@@ -14,6 +15,8 @@ from surrealdb import AsyncSurreal, RecordID
 
 from ragcore.config import SurrealConfig
 from ragcore.errors import StoreError
+
+logger = logging.getLogger(__name__)
 
 _PROMPT_DIR = str(Path(__file__).parent / "prompts")
 _CODE_FENCE = re.compile(r"^```(?:json)?\s*\n?(.*?)\n?```\s*$", re.DOTALL)
@@ -58,7 +61,8 @@ async def extract_triples(
             ):
                 result.append({"subject": t["subject"], "predicate": t["predicate"], "object": t["object"]})
         return result
-    except Exception:
+    except Exception as e:
+        logger.debug("graph extraction parse failed: %s", e)
         return []
 
 
@@ -71,6 +75,7 @@ def _chat_fn(config):
     from ragcore.ask import _build_chat, _clean
 
     async def fn(prompt: str) -> str:
+        # no content= : graph extraction always routes via the role default (local model)
         msg = await _build_chat(config).ainvoke(prompt)
         return _clean(msg.content)
 
@@ -143,10 +148,24 @@ class GraphStore:
                         continue
                     subj_id = await self._upsert_entity(db, subj_name, source_id)
                     obj_id = await self._upsert_entity(db, obj_name, source_id)
-                    await db.query(
-                        "RELATE $subj->relates->$obj SET predicate = $pred, sources = [$src];",
-                        {"subj": subj_id, "obj": obj_id, "pred": predicate, "src": source_id},
-                    )
+                    existing = self._rows(await db.query(
+                        "SELECT id, sources FROM relates WHERE `in` = $i AND out = $o AND predicate = $p LIMIT 1;",
+                        {"i": subj_id, "o": obj_id, "p": predicate},
+                    ))
+                    if existing:
+                        edge = existing[0]
+                        sources = edge.get("sources") or []
+                        if source_id not in sources:
+                            sources = sources + [source_id]
+                            await db.query(
+                                "UPDATE $eid SET sources = $s;",
+                                {"eid": edge["id"], "s": sources},
+                            )
+                    else:
+                        await db.query(
+                            "RELATE $i->relates->$o SET predicate = $p, sources = $s;",
+                            {"i": subj_id, "o": obj_id, "p": predicate, "s": [source_id]},
+                        )
                 except Exception:
                     continue  # skip individual bad triples
         except StoreError:
@@ -161,6 +180,8 @@ class GraphStore:
 
         hops=1 returns direct neighbors. Used in Task 9 retrieval and tests.
         """
+        if hops < 1:
+            raise ValueError(f"hops must be >= 1, got {hops}")
         norm = name.strip().lower()
         db = self._connect()
         try:
@@ -191,5 +212,37 @@ class GraphStore:
             return out
         except Exception as e:
             raise StoreError(f"neighbors failed: {e}") from e
+        finally:
+            await db.close()
+
+    async def edge_count(self, subj_name: str, obj_name: str) -> int:
+        """Return the number of relates edges between two entities (by name).
+
+        Used in tests to assert deduplication.
+        """
+        subj_norm = subj_name.strip().lower()
+        obj_norm = obj_name.strip().lower()
+        db = self._connect()
+        try:
+            await self._signin(db)
+            subj_rows = self._rows(await db.query(
+                "SELECT id FROM entity WHERE norm = $norm LIMIT 1;",
+                {"norm": subj_norm},
+            ))
+            obj_rows = self._rows(await db.query(
+                "SELECT id FROM entity WHERE norm = $norm LIMIT 1;",
+                {"norm": obj_norm},
+            ))
+            if not subj_rows or not obj_rows:
+                return 0
+            subj_id = subj_rows[0]["id"]
+            obj_id = obj_rows[0]["id"]
+            edges = self._rows(await db.query(
+                "SELECT id FROM relates WHERE `in` = $i AND out = $o;",
+                {"i": subj_id, "o": obj_id},
+            ))
+            return len(edges)
+        except Exception as e:
+            raise StoreError(f"edge_count failed: {e}") from e
         finally:
             await db.close()
