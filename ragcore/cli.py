@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -275,6 +276,14 @@ def serve(host: str = typer.Option("127.0.0.1", "--host"),
         _fail(e)
 
 
+async def _record_eval_run(cfg, report, dataset, tag) -> str:
+    snapshot = _config_snapshot(cfg)
+    snapshot["centroid"] = await _dataset_centroid(cfg, dataset)
+    from ragcore.llmops.registry import RunRegistry
+    return await RunRegistry(cfg.surreal).record(
+        metrics=report, config_snapshot=snapshot, dataset=dataset, tag=tag)
+
+
 def _config_snapshot(cfg) -> dict:
     return {"models": {k: v.local_model for k, v in cfg.models.items()},
             "routing": cfg.routing.model_dump(),
@@ -283,8 +292,6 @@ def _config_snapshot(cfg) -> dict:
 
 
 async def _dataset_centroid(cfg, dataset_path):
-    from pathlib import Path
-
     from ragcore.eval.harness import _DEFAULT_DATASET, _load_dataset
 
     items = _load_dataset(Path(dataset_path) if dataset_path else _DEFAULT_DATASET)
@@ -304,17 +311,9 @@ def eval_cmd(
     """Evaluate retrieval+answer quality (Ragas + TruLens) with a local Ollama judge."""
     try:
         from ragcore.eval.harness import run_eval
-        from ragcore.llmops.registry import RunRegistry
         cfg = load_config(_state["config_path"])
         report = run_eval(cfg, dataset)
-        snapshot = _config_snapshot(cfg)
-        snapshot["centroid"] = asyncio.run(_dataset_centroid(cfg, dataset))
-        run_id = asyncio.run(RunRegistry(cfg.surreal).record(
-            metrics=report,
-            config_snapshot=snapshot,
-            dataset=dataset,
-            tag=tag,
-        ))
+        run_id = asyncio.run(_record_eval_run(cfg, report, dataset, tag))
         typer.echo(f"Run recorded: {run_id}")
     except typer.Exit:
         raise

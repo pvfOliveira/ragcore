@@ -4,6 +4,9 @@ import math
 
 
 def _flatten(metrics: dict) -> dict[str, float]:
+    """Flatten {family: {name: float}} metric reports to {'family.name': float}.
+    Only nested numeric leaves are compared; top-level scalars are intentionally
+    ignored (run_eval emits nested families)."""
     out = {}
     for family, scores in metrics.items():
         if isinstance(scores, dict):
@@ -28,6 +31,8 @@ def check_gate(current: dict, baseline: dict, tolerance: float):
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:
+    if len(a) != len(b):
+        return 1.0   # different embedding dimensionality => maximal drift
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
@@ -37,6 +42,6 @@ def _cosine_distance(a: list[float], b: list[float]) -> float:
 
 
 def check_drift(baseline_centroid, current_centroid, threshold: float):
-    """Returns (drifted: bool, distance: float)."""
+    """Returns (drifted, distance); a dimensionality mismatch counts as maximal drift (distance 1.0)."""
     distance = _cosine_distance(baseline_centroid, current_centroid)
     return (distance > threshold), distance

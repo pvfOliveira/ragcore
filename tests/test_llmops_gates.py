@@ -10,6 +10,7 @@ def test_gate_passes_within_tolerance():
     assert ok is True
     assert regressions == []
 
+
 def test_gate_fails_on_regression():
     baseline = {"ragas": {"faithfulness": 0.80}}
     current  = {"ragas": {"faithfulness": 0.60}}
@@ -18,11 +19,18 @@ def test_gate_fails_on_regression():
     assert regressions[0]["metric"] == "ragas.faithfulness"
     assert regressions[0]["delta"] == pytest.approx(-0.20)
 
+
 def test_drift_flags_far_centroid():
     drifted, distance = check_drift([1.0, 0.0], [0.0, 1.0], threshold=0.15)
     assert drifted is True
     assert distance == pytest.approx(1.0)
 
+
 def test_drift_ok_near_centroid():
     drifted, distance = check_drift([1.0, 0.0], [0.99, 0.01], threshold=0.15)
     assert drifted is False
+    assert distance < 0.01
+
+
+def test_drift_dimension_mismatch_is_maximal():
+    assert check_drift([1.0, 0.0], [1.0, 0.0, 0.0], threshold=0.15) == (True, 1.0)
