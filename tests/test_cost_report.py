@@ -35,6 +35,24 @@ def test_report_handles_empty_ledger():
     assert rep["total_spend_usd"] == 0.0
 
 
+def test_report_includes_bench_summary():
+    agg = {"totals": {"requests": 1, "prompt_tokens": 10, "completion_tokens": 5},
+           "cache": {"hits": 0, "misses": 1, "hit_rate": 0.0}, "by_model": []}
+    bench = {
+        "runs": [{"num_ctx": 2048, "num_batch": 128, "concurrency": 1,
+                  "ttft_s": 0.2, "total_latency_s": 1.5, "tok_per_s": 35.7}],
+        "best_throughput": {"num_ctx": 2048, "num_batch": 128, "concurrency": 1,
+                            "ttft_s": 0.2, "total_latency_s": 1.5, "tok_per_s": 35.7},
+        "best_latency": {"num_ctx": 2048, "num_batch": 128, "concurrency": 1,
+                         "ttft_s": 0.2, "total_latency_s": 1.5, "tok_per_s": 35.7},
+    }
+    rep = build_report(agg, {}, bench=bench)
+    assert rep["bench_summary"] is not None
+    assert rep["bench_summary"]["best_tok_per_s"] == pytest.approx(35.7)   # NOT 0.0
+    assert rep["bench_summary"]["best_ttft_s"] == pytest.approx(0.2)
+    assert rep["bench_summary"]["best_total_latency_s"] == pytest.approx(1.5)
+
+
 def test_spend_accumulates_across_roles_for_same_model():
     agg = {
         "totals": {"requests": 2, "prompt_tokens": 400, "completion_tokens": 200},

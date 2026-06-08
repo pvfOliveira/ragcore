@@ -19,7 +19,6 @@ Tests:
 """
 from __future__ import annotations
 
-import asyncio
 import copy
 
 import pytest
@@ -51,7 +50,6 @@ def test_llmops_eval_registry_gate_deploy(surreal_url):
     """Real Ragas/TruLens eval over Ollama → RunRegistry record → gate → promote/rollback."""
     import asyncio as _asyncio
 
-    from ragcore.embedding import generate_embedding
     from ragcore.eval.harness import _OllamaJudge, compute_metrics
     from ragcore.ingest import ingest_source
     from ragcore.llmops.deploy import DeploymentStore
@@ -65,7 +63,7 @@ def test_llmops_eval_registry_gate_deploy(surreal_url):
     store = Store(cfg.surreal)
     _asyncio.run(store.init_schema())
 
-    import tempfile, pathlib
+    import tempfile
     with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", delete=False) as fh:
         fh.write(
             "The Eiffel Tower is located in Paris, France. "

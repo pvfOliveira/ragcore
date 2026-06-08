@@ -82,20 +82,13 @@ def build_report(agg: dict, rates: dict, bench) -> dict:
     bench_summary = None
     if bench is not None:
         try:
-            runs = bench.get("runs") or []
-            if runs:
-                best_throughput = max(
-                    (r.get("tokens_per_second", 0.0) for r in runs), default=0.0
-                )
-                best_latency = min(
-                    (r.get("ttft_ms", float("inf")) for r in runs), default=None
-                )
-                if best_latency == float("inf"):
-                    best_latency = None
-                bench_summary = {
-                    "best_throughput_tok_s": best_throughput,
-                    "best_latency_ttft_ms": best_latency,
-                }
+            bt = bench.get("best_throughput") or {}
+            bl = bench.get("best_latency") or {}
+            bench_summary = {
+                "best_tok_per_s": bt.get("tok_per_s"),
+                "best_ttft_s": bl.get("ttft_s"),
+                "best_total_latency_s": bl.get("total_latency_s"),
+            }
         except (TypeError, AttributeError, ValueError, KeyError):
             bench_summary = None
 

@@ -610,9 +610,12 @@ def cost_report_cmd():
         if rep.get("bench_summary"):
             bs = rep["bench_summary"]
             typer.echo("")
-            bench_line = f"Bench:  best_throughput={bs['best_throughput_tok_s']:.1f} tok/s"
-            if bs["best_latency_ttft_ms"] is not None:
-                bench_line += f"  best_ttft={bs['best_latency_ttft_ms']} ms"
+            best_tok = bs["best_tok_per_s"]
+            bench_line = f"Bench:  best_tok_per_s={best_tok:.1f} tok/s" if best_tok is not None else "Bench:  best_tok_per_s=n/a"
+            if bs["best_ttft_s"] is not None:
+                bench_line += f"  best_ttft={bs['best_ttft_s']:.3f} s"
+            if bs["best_total_latency_s"] is not None:
+                bench_line += f"  best_total_latency={bs['best_total_latency_s']:.3f} s"
             typer.echo(bench_line)
     except typer.Exit:
         raise
