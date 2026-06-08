@@ -110,6 +110,8 @@ def _build_graph():
 _CACHE_PATH = str(Path(__file__).parent.parent / "data" / "semantic_cache.db")
 _cache: SemanticCache | None = None
 
+_ledger: dict = {}  # keyed by ledger_path
+
 
 def _get_cache(config) -> SemanticCache:
     global _cache
@@ -118,13 +120,44 @@ def _get_cache(config) -> SemanticCache:
     return _cache
 
 
+def _get_ledger(config):
+    from ragcore.cost.ledger import CostLedger
+
+    path = config.cost.ledger_path
+    if path not in _ledger:
+        _ledger[path] = CostLedger(path=path)
+    return _ledger[path]
+
+
 async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    # Budget enforcement: check BEFORE any LLM call.
+    if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
+        if config.cost.enforce:
+            from ragcore.chunking import token_count
+            from ragcore.cost.ledger import over_budget
+            from ragcore.errors import RagcoreError
+
+            if over_budget(token_count(question), config.cost.budget_tokens):
+                raise RagcoreError(
+                    f"request exceeds token budget ({config.cost.budget_tokens})"
+                )
+
     if config is not None and getattr(config, "cache", None) is not None and config.cache.enabled:
         from ragcore.embedding import generate_embedding
         q_emb = await generate_embedding(question, config)
         cache = _get_cache(config)
         hit = cache.get(q_emb)
         if hit is not None:
+            if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
+                provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
+                _get_ledger(config).record(
+                    role="chat",
+                    provider=provider,
+                    model=model,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    cached=True,
+                )
             return {"answer": hit["answer"], "citations": hit["sources"]}
 
         graph = _build_graph()
@@ -136,6 +169,18 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         answer = result["answer"]
         citations = result.get("citations", [])
         cache.put(question, q_emb, answer=answer, sources=citations)
+        if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
+            from ragcore.chunking import token_count
+
+            provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
+            _get_ledger(config).record(
+                role="chat",
+                provider=provider,
+                model=model,
+                prompt_tokens=token_count(question),
+                completion_tokens=token_count(answer),
+                cached=False,
+            )
         return {"answer": answer, "citations": citations}
 
     graph = _build_graph()
@@ -144,4 +189,18 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         "_store": store, "_config": config, "_embedder_fn": embedder_fn,
         "_force_cloud": force_cloud,
     })
-    return {"answer": result["answer"], "citations": result.get("citations", [])}
+    answer = result["answer"]
+    citations = result.get("citations", [])
+    if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
+        from ragcore.chunking import token_count
+
+        provider, model = select_model(config, "chat", content=question, force_cloud=force_cloud)
+        _get_ledger(config).record(
+            role="chat",
+            provider=provider,
+            model=model,
+            prompt_tokens=token_count(question),
+            completion_tokens=token_count(answer),
+            cached=False,
+        )
+    return {"answer": answer, "citations": citations}
