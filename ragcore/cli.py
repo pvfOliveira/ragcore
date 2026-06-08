@@ -282,6 +282,20 @@ def _config_snapshot(cfg) -> dict:
             "vector_backend": cfg.store.vector_backend}
 
 
+async def _dataset_centroid(cfg, dataset_path):
+    from pathlib import Path
+
+    from ragcore.eval.harness import _DEFAULT_DATASET, _load_dataset
+
+    items = _load_dataset(Path(dataset_path) if dataset_path else _DEFAULT_DATASET)
+    embed = _embedder(cfg)
+    vecs = [await embed(it["question"]) for it in items]
+    if not vecs:
+        return []
+    n = len(vecs)
+    return [sum(v[i] for v in vecs) / n for i in range(len(vecs[0]))]
+
+
 @app.command("eval")
 def eval_cmd(
     dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset"),
@@ -293,13 +307,74 @@ def eval_cmd(
         from ragcore.llmops.registry import RunRegistry
         cfg = load_config(_state["config_path"])
         report = run_eval(cfg, dataset)
+        snapshot = _config_snapshot(cfg)
+        snapshot["centroid"] = asyncio.run(_dataset_centroid(cfg, dataset))
         run_id = asyncio.run(RunRegistry(cfg.surreal).record(
             metrics=report,
-            config_snapshot=_config_snapshot(cfg),
+            config_snapshot=snapshot,
             dataset=dataset,
             tag=tag,
         ))
         typer.echo(f"Run recorded: {run_id}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command(name="gate")
+def gate_cmd(
+    baseline: str = typer.Option(..., "--baseline", help="Baseline run id or tag"),
+    dataset: Optional[str] = typer.Option(None, "--dataset"),
+):
+    """Run eval; exit 1 if any metric regresses beyond [llmops] tolerance vs the baseline."""
+    try:
+        cfg, _ = _load()
+        from ragcore.eval.harness import run_eval
+        from ragcore.llmops.gates import check_gate
+        from ragcore.llmops.registry import RunRegistry
+        base = asyncio.run(RunRegistry(cfg.surreal).resolve(baseline))
+        if base is None:
+            typer.echo(f"No baseline run for '{baseline}'", err=True)
+            raise typer.Exit(2)
+        report = run_eval(cfg, dataset)
+        ok, regressions = check_gate(report, base["metrics"], cfg.llmops.tolerance)
+        for r in regressions:
+            typer.echo(f"REGRESSION {r['metric']}: {r['baseline']:.3f} -> {r['current']:.3f}", err=True)
+        typer.echo("GATE PASS" if ok else "GATE FAIL")
+        raise typer.Exit(0 if ok else 1)
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command(name="drift")
+def drift_cmd(
+    baseline: str = typer.Option(..., "--baseline", help="Baseline run id or tag"),
+    dataset: Optional[str] = typer.Option(None, "--dataset"),
+):
+    """Check embedding-space drift vs a baseline run's stored centroid; exit 1 if drifted."""
+    try:
+        cfg, _ = _load()
+        from ragcore.llmops.gates import check_drift
+        from ragcore.llmops.registry import RunRegistry
+        base = asyncio.run(RunRegistry(cfg.surreal).resolve(baseline))
+        if base is None:
+            typer.echo(f"No baseline run for '{baseline}'", err=True)
+            raise typer.Exit(2)
+        base_centroid = base["config_snapshot"].get("centroid")
+        if not base_centroid:
+            typer.echo(
+                f"Baseline run '{baseline}' has no stored centroid; "
+                "re-run eval to record one.", err=True
+            )
+            raise typer.Exit(2)
+        current_centroid = asyncio.run(_dataset_centroid(cfg, dataset))
+        drifted, distance = check_drift(base_centroid, current_centroid, cfg.llmops.drift_threshold)
+        typer.echo(f"Centroid distance: {distance:.4f}  (threshold={cfg.llmops.drift_threshold})")
+        typer.echo("DRIFT DETECTED" if drifted else "DRIFT OK")
+        raise typer.Exit(1 if drifted else 0)
     except typer.Exit:
         raise
     except Exception as e:
