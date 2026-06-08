@@ -81,3 +81,8 @@ DEFINE FIELD IF NOT EXISTS config_snapshot ON TABLE eval_run TYPE string;
 DEFINE FIELD IF NOT EXISTS metrics ON TABLE eval_run TYPE string;
 DEFINE FIELD IF NOT EXISTS gate_passed ON TABLE eval_run TYPE option<bool>;
 DEFINE FIELD IF NOT EXISTS created ON eval_run DEFAULT time::now() VALUE $before OR time::now();
+
+DEFINE TABLE IF NOT EXISTS deployment SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS run_id ON TABLE deployment TYPE string;
+DEFINE FIELD IF NOT EXISTS history ON TABLE deployment TYPE option<array<string>>;
+DEFINE FIELD IF NOT EXISTS updated ON deployment DEFAULT time::now() VALUE time::now();

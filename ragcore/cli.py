@@ -380,6 +380,37 @@ def drift_cmd(
         _fail(e)
 
 
+@app.command(name="promote")
+def promote_cmd(
+    run_id: str,
+    no_gate: bool = typer.Option(False, "--no-gate", help="Promote even if the run's gate did not pass"),
+):
+    """Point production at an eval run (refuses a run that failed its gate unless --no-gate)."""
+    try:
+        cfg, _ = _load()
+        from ragcore.llmops.deploy import DeploymentStore
+        asyncio.run(DeploymentStore(cfg.surreal).promote(run_id, require_gate=not no_gate))
+        typer.echo(f"Promoted {run_id}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command(name="rollback")
+def rollback_cmd():
+    """Revert production to the previously promoted run."""
+    try:
+        cfg, _ = _load()
+        from ragcore.llmops.deploy import DeploymentStore
+        prev = asyncio.run(DeploymentStore(cfg.surreal).rollback())
+        typer.echo(f"Rolled back to {prev}" if prev else "No previous deployment to roll back to.")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
 @app.command(name="runs")
 def runs_cmd():
     """List recorded eval runs (id, tag, created, key metrics)."""
