@@ -513,13 +513,14 @@ def graph_build():
             if not chunks:
                 typer.echo(f"skipped {sid} (no chunks)")
                 continue
-            total_triples = 0
+            all_triples = []
             for chunk in chunks:
-                triples = asyncio.run(extract_triples(chunk, chat))
-                if triples:
-                    asyncio.run(gs.upsert_triples(sid, triples))
-                    total_triples += len(triples)
-            typer.echo(f"graphed {sid} ({total_triples} triples)")
+                all_triples.extend(asyncio.run(extract_triples(chunk, chat)))
+            if all_triples:
+                asyncio.run(gs.upsert_triples(sid, all_triples))
+                typer.echo(f"graphed {sid} ({len(all_triples)} triples)")
+            else:
+                typer.echo(f"graphed {sid} (no triples)")
     except typer.Exit:
         raise
     except Exception as e:

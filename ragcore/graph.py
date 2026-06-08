@@ -286,9 +286,12 @@ async def graph_context(config, query: str, k: int = 10) -> list[dict]:
         try:
             await gs._signin(db)
 
-            # 1. Find seed entities whose norm appears in the lowercased query
+            # 1. Find seed entities whose norm appears in the lowercased query.
+            # Floor: skip very short norms (len < 3) that match almost every query
+            # (e.g. "a", "is") and would flood seeds with spurious results.
             seeds = gs._rows(await db.query(
-                "SELECT id, norm, sources FROM entity WHERE string::lowercase($q) CONTAINS norm;",
+                "SELECT id, norm, sources FROM entity"
+                " WHERE string::len(norm) >= 3 AND string::lowercase($q) CONTAINS norm;",
                 {"q": query},
             ))
             if not seeds:
