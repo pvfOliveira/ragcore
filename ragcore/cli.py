@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -436,6 +437,62 @@ def models():
         if spec.cloud_model:
             line += f"  cloud={spec.cloud_provider}/{spec.cloud_model}"
         typer.echo(line)
+
+
+cost_app = typer.Typer(help="Cost ledger and spend reporting.")
+app.add_typer(cost_app, name="cost")
+
+
+@cost_app.command(name="report")
+def cost_report_cmd():
+    """Print spend by model, cache savings, and right-sizing hints."""
+    try:
+        from ragcore.cost.ledger import CostLedger
+        from ragcore.cost.report import build_report
+
+        cfg, _ = _load()
+        agg = CostLedger(cfg.cost.ledger_path).aggregate()
+        bench_path = Path("data/bench/report.json")
+        bench = json.loads(bench_path.read_text()) if bench_path.exists() else None
+        rep = build_report(agg, cfg.cost.rates, bench)
+
+        typer.echo("=== Cost Report ===")
+        typer.echo(f"Total spend:  ${rep['total_spend_usd']:.4f}")
+        typer.echo("")
+
+        typer.echo("Spend by model:")
+        if rep["spend_usd"]:
+            for key, usd in rep["spend_usd"].items():
+                typer.echo(f"  {key:<40}  ${usd:.4f}")
+        else:
+            typer.echo("  (no usage recorded)")
+        typer.echo("")
+
+        cache = rep["cache"]
+        typer.echo(
+            f"Cache:  hit_rate={cache['hit_rate'] * 100:.1f}%"
+            f"  tokens_avoided_estimate={cache['tokens_avoided_estimate']:.0f}"
+        )
+        typer.echo("")
+
+        if rep["rightsizing"]:
+            typer.echo("Right-sizing hints:")
+            for hint in rep["rightsizing"]:
+                typer.echo(f"  • {hint}")
+        else:
+            typer.echo("Right-sizing hints: none")
+
+        if rep.get("bench_summary"):
+            bs = rep["bench_summary"]
+            typer.echo("")
+            typer.echo(
+                f"Bench:  best_throughput={bs['best_throughput_tok_s']:.1f} tok/s"
+                f"  best_ttft={bs['best_latency_ttft_ms']} ms"
+            )
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
 
 
 if __name__ == "__main__":
