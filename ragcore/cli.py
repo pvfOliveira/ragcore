@@ -429,6 +429,53 @@ def runs_cmd():
 
 
 @app.command()
+def bench():
+    """Sweep Ollama serving params and report latency/throughput (MPS benchmark)."""
+    try:
+        import json
+
+        from ragcore.bench.harness import OllamaBenchClient, run_bench
+
+        cfg, _ = _load()
+        client = OllamaBenchClient(model=cfg.models["chat"].local_model)
+        report = run_bench(client, **cfg.bench.model_dump())
+
+        # Print table header
+        typer.echo(
+            f"{'num_ctx':>8}  {'num_batch':>9}  {'conc':>4}  "
+            f"{'ttft_s':>7}  {'latency_s':>9}  {'tok/s':>8}"
+        )
+        typer.echo("-" * 58)
+        for run in report["runs"]:
+            typer.echo(
+                f"{run['num_ctx']:>8}  {run['num_batch']:>9}  {run['concurrency']:>4}  "
+                f"{run['ttft_s']:>7.3f}  {run['total_latency_s']:>9.3f}  {run['tok_per_s']:>8.1f}"
+            )
+
+        bt = report["best_throughput"]
+        bl = report["best_latency"]
+        typer.echo("")
+        typer.echo(
+            f"Best throughput: ctx={bt['num_ctx']} batch={bt['num_batch']} "
+            f"conc={bt['concurrency']} → {bt['tok_per_s']:.1f} tok/s"
+        )
+        typer.echo(
+            f"Best latency:    ctx={bl['num_ctx']} batch={bl['num_batch']} "
+            f"conc={bl['concurrency']} → {bl['total_latency_s']:.3f}s total / {bl['ttft_s']:.3f}s ttft"
+        )
+
+        # Write report JSON
+        report_path = Path("data/bench/report.json")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
+        typer.echo(f"\nReport written to {report_path}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command()
 def models():
     """Show configured model roles."""
     cfg = load_config(_state["config_path"])
