@@ -101,6 +101,7 @@ DEFINE TABLE IF NOT EXISTS image_embedding SCHEMAFULL;
 DEFINE FIELD IF NOT EXISTS origin ON TABLE image_embedding TYPE string;
 DEFINE FIELD IF NOT EXISTS path ON TABLE image_embedding TYPE string;
 DEFINE FIELD IF NOT EXISTS embedding ON TABLE image_embedding TYPE array<float>;
+DEFINE INDEX IF NOT EXISTS idx_image_origin ON TABLE image_embedding COLUMNS origin UNIQUE;
 
 DEFINE FUNCTION IF NOT EXISTS fn::image_search($query: array<float>, $k: int) {
     RETURN (

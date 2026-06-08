@@ -44,7 +44,7 @@ def cross_modal_rank(
     for img in images:
         emb = img.get("embedding", [])
         score = _cosine(query_vec, emb)
-        row = {k: v for k, v in img.items() if k != "embedding"}
+        row = {field: val for field, val in img.items() if field != "embedding"}
         row["score"] = score
         scored.append(row)
     scored.sort(key=lambda r: r["score"], reverse=True)
@@ -183,6 +183,19 @@ class ImageStore:
         finally:
             await db.close()
 
+    async def find_by_origin(self, origin: str) -> str | None:
+        """Return the record id string if *origin* was already ingested, else None."""
+        db = self._connect()
+        try:
+            await self._signin(db)
+            rows = self._rows(await db.query(
+                "SELECT id FROM image_embedding WHERE origin = $o LIMIT 1;", {"o": origin}))
+            return str(rows[0]["id"]) if rows else None
+        except Exception as e:
+            raise StoreError(f"find_by_origin failed: {e}") from e
+        finally:
+            await db.close()
+
     async def search(self, query_vec: list[float], k: int = 5) -> list[dict]:
         """Return top-k image records by cosine similarity to *query_vec*."""
         db = self._connect()
@@ -211,8 +224,16 @@ class ImageStore:
 # Top-level ingest helper
 # ---------------------------------------------------------------------------
 
-async def ingest_image(path: str, config: Any) -> str:
-    """Embed *path* with CLIP and store in image_embedding; return the record id."""
+async def ingest_image(path: str, config: Any) -> tuple[str, bool]:
+    """Embed *path* with CLIP and store in image_embedding.
+
+    Returns ``(image_id, created)`` where *created* is False when the origin
+    was already ingested (dedup pre-flight skips the expensive CLIP call).
+    """
+    store = ImageStore(config.surreal)
+    existing = await store.find_by_origin(path)
+    if existing is not None:
+        return existing, False
     mm_cfg = config.multimodal
     embedder = ClipEmbedder(
         model_name=mm_cfg.model,
@@ -220,4 +241,5 @@ async def ingest_image(path: str, config: Any) -> str:
         device=mm_cfg.device,
     )
     emb = embedder.embed_image(path)
-    return await ImageStore(config.surreal).add_image(origin=path, path=path, embedding=emb)
+    image_id = await store.add_image(origin=path, path=path, embedding=emb)
+    return image_id, True

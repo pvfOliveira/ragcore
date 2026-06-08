@@ -73,8 +73,11 @@ def ingest(
         cfg, store = _load()
         if _is_image_path(source):
             from ragcore.multimodal import ingest_image
-            image_id = asyncio.run(ingest_image(source, cfg))
-            typer.echo(f"Ingested image {source} as {image_id}")
+            image_id, created = asyncio.run(ingest_image(source, cfg))
+            if created:
+                typer.echo(f"Ingested image {source} as {image_id}")
+            else:
+                typer.echo(f"Skipped {source} (already ingested as {image_id})")
             return
         if is_async:
             from ragcore.jobs import JobQueue

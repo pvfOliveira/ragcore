@@ -40,3 +40,16 @@ async def test_image_store_add_and_search(surreal_config):
     hits = await store.search([0.9, 0.1, 0.0], k=1)
     assert hits[0]["path"] == "cat.png"
     assert "similarity" in hits[0]
+
+
+async def test_image_store_find_by_origin_and_dedup(surreal_config):
+    from ragcore.multimodal import ImageStore
+    store = ImageStore(surreal_config)
+    assert await store.find_by_origin("cat.png") is None
+    id1 = await store.add_image("cat.png", "cat.png", [1.0, 0.0, 0.0])
+    found = await store.find_by_origin("cat.png")
+    assert found == id1
+    # the UNIQUE index must reject a duplicate origin insert
+    import pytest as _pytest
+    with _pytest.raises(Exception):
+        await store.add_image("cat.png", "cat.png", [0.0, 1.0, 0.0])
