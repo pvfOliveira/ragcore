@@ -1,3 +1,12 @@
+import os
+
+# torch (open_clip) and faiss-cpu each bundle their own OpenMP runtime; importing
+# both in one process aborts on macOS with "OMP: Error #15 ... libomp already
+# initialized". Allowing the duplicate runtime is the standard, safe-in-practice
+# workaround for a test process that loads both. Set before any test module imports
+# torch or faiss.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 import shutil
 import socket
 import subprocess
