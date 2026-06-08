@@ -172,6 +172,144 @@ against a local Ollama (qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by th
 > default Ollama HTTP read-timeout under qwen3:8b — independent of the metrics,
 > which are verified above.
 
+## LLM platform
+
+Optional capabilities installed with `pip install -e ".[platform]"` (or the
+individual extras below). All are opt-in via `config.toml` and do not affect
+the default ingest/ask/eval paths unless explicitly enabled.
+
+### LLMOps lifecycle
+
+An `eval_run` registry (SurrealDB) records every evaluation with its metrics,
+config snapshot, and an optional tag. A `deployment:current` pointer tracks
+which run is live, and a history list supports one-level rollback.
+
+```toml
+[llmops]
+tolerance       = 0.05   # max allowed metric regression vs baseline
+drift_threshold = 0.15   # cosine-distance drift that fails `drift`
+```
+
+```bash
+ragcore eval --tag v2            # run eval and record a named run
+ragcore runs                     # list all recorded eval runs
+ragcore gate  --baseline v1      # exit nonzero if any metric regressed vs baseline
+ragcore drift --baseline v1      # report embedding centroid drift vs baseline
+ragcore promote <run-id>         # set deployment:current (gate required unless --no-gate)
+ragcore rollback                 # revert deployment:current to the previous run
+```
+
+### Cost optimization
+
+Per-request token accounting at the LLM call boundary, recorded in a
+local SQLite ledger. `ragcore cost report` aggregates spend by model,
+cache hit-rate and tokens avoided, plus right-sizing hints.
+
+```toml
+[cost]
+enabled       = false    # record usage into the ledger
+enforce       = false    # block requests over budget (else warn only)
+budget_tokens = 0        # 0 = no budget
+ledger_path   = "data/cost.db"
+
+[cost.rates]
+"anthropic:claude-3-5-sonnet-20241022" = 3.0   # USD per 1k tokens (local = omit)
+```
+
+```bash
+ragcore cost report              # spend by model, cache hit-rate, right-sizing hints
+```
+
+### Serving benchmark (inference-optimization)
+
+Sweeps the cartesian product of `num_ctx × num_batch × concurrency` against a
+local Ollama server on MPS, reporting latency (TTFT + total) and aggregate
+throughput.
+
+```toml
+[bench]
+num_ctx     = [2048, 4096]
+num_batch   = [128, 256]
+concurrency = [1, 2, 4]
+keep_alive  = "5m"
+prompt      = "Summarize the theory of relativity in three sentences."
+```
+
+```bash
+ragcore bench                    # sweep and print latency/throughput report
+```
+
+> **GPU/vLLM holdout:** production inference-optimization (continuous batching,
+> paged KV-cache, AWQ/GPTQ quantization via vLLM or TGI) requires CUDA and is
+> a documented design-only holdout on this MPS host.
+> `ragcore/bench/serving.py::vllm_serve` raises at runtime when `nvidia-smi`
+> is absent. The MPS Ollama bench (`ragcore bench`) is the runnable artifact
+> on this machine.
+
+### Graph-RAG
+
+LLM triple extraction at ingest time populates a SurrealDB entity/relation
+graph. At query time, entities mentioned in the query seed a graph traversal
+and the connected chunks are injected as a third RRF signal alongside vector
+and BM25 results.
+
+```toml
+[graph]
+enabled = false   # enable graph-RAG traversal at query time
+hops    = 1       # traversal depth
+```
+
+```bash
+ragcore graph build              # back-fill the graph for already-ingested sources
+```
+
+Enable `[graph] enabled = true` before ingesting to extract triples
+automatically; or run `ragcore graph build` to back-fill an existing corpus.
+
+### Multimodal (CLIP)
+
+CLIP-embeds images at ingest time and stores them in a `image_embedding`
+SurrealDB table. `ragcore search --images` runs a cross-modal text→image query
+using a SurrealDB-side cosine function.
+
+```bash
+pip install -e ".[multimodal]"   # adds open_clip, torch, Pillow
+
+ragcore ingest photo.png         # CLIP-embed an image and store it
+ragcore search --images "a red sunset"   # cross-modal text → image retrieval
+```
+
+Configure the CLIP model and device in `config.toml`:
+
+```toml
+[multimodal]
+model      = "ViT-B-32"
+pretrained = "laion2b_s34b_b79k"
+device     = "mps"   # mps | cuda | cpu
+```
+
+### Test tiers (platform)
+
+- **Deterministic** (`pytest tests`): 162 tests — stubs all LLM calls and
+  SurrealDB interactions; no Ollama required. SurrealDB-backed tests
+  auto-skip if the `surreal` binary is absent.
+- **Live** (`pytest tests/live -m live`): 5 end-to-end platform tests
+  (llmops, cost, bench, graph, multimodal) over real Ollama + SurrealDB +
+  CLIP. Auto-skipped unless `http://localhost:11434` is reachable.
+
+### Skills demonstrated
+
+`file:line` artifacts for the platform layer. Each `file:line` was verified
+by reading the file.
+
+| Skill | Artifact | Status |
+| --- | --- | --- |
+| llmops | `ragcore/llmops/registry.py:27` (`RunRegistry.record`); `ragcore/llmops/gates.py:19` (`check_gate`), `ragcore/llmops/gates.py:44` (`check_drift`); `ragcore/llmops/deploy.py:43` (`DeploymentStore.promote`) | proven (deterministic + live) |
+| ai-cost-optimization | `ragcore/cost/ledger.py:7` (`CostLedger`); `ragcore/cost/report.py:5` (`build_report`) | proven (deterministic + live) |
+| graph-rag | `ragcore/graph.py:33` (`extract_triples`), `ragcore/graph.py:89` (`GraphStore`), `ragcore/graph.py:273` (`graph_context`); `ragcore/retrieve.py:29` (`fuse_with_graph`) | proven (deterministic + live) |
+| multimodal-ai | `ragcore/multimodal.py:58` (`ClipEmbedder`), `ragcore/multimodal.py:33` (`cross_modal_rank`), `ragcore/multimodal.py:154` (`ImageStore`) | proven (deterministic + live) |
+| inference-optimization | `ragcore/bench/harness.py:30` (`run_bench`); `ragcore/bench/serving.py:39` (`vllm_serve` — CUDA-gated design stub) | MPS bench proven; GPU serving aspirational (holdout) |
+
 ## Web UI
 
 A thin local chat UI (FastAPI + one HTML page, no build step):
