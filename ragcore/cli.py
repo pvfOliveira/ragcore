@@ -275,13 +275,46 @@ def serve(host: str = typer.Option("127.0.0.1", "--host"),
         _fail(e)
 
 
+def _config_snapshot(cfg):
+    return {"models": {k: v.local_model for k, v in cfg.models.items()},
+            "routing": cfg.routing.model_dump(),
+            "rerank": cfg.rerank.enabled, "cache": cfg.cache.enabled,
+            "vector_backend": cfg.store.vector_backend}
+
+
 @app.command("eval")
-def eval_cmd(dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset")):
+def eval_cmd(
+    dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset"),
+    tag: Optional[str] = typer.Option(None, "--tag", help="Label this run for later reference"),
+):
     """Evaluate retrieval+answer quality (Ragas + TruLens) with a local Ollama judge."""
     try:
         from ragcore.eval.harness import run_eval
+        from ragcore.llmops.registry import RunRegistry
         cfg = load_config(_state["config_path"])
-        run_eval(cfg, dataset)
+        report = run_eval(cfg, dataset)
+        run_id = asyncio.run(RunRegistry(cfg.surreal).record(
+            metrics=report,
+            config_snapshot=_config_snapshot(cfg),
+            dataset=dataset,
+            tag=tag,
+        ))
+        typer.echo(f"Run recorded: {run_id}")
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
+@app.command(name="runs")
+def runs_cmd():
+    """List recorded eval runs (id, tag, created, key metrics)."""
+    try:
+        cfg, _ = _load()
+        from ragcore.llmops.registry import RunRegistry
+        rows = asyncio.run(RunRegistry(cfg.surreal).list_runs())
+        for r in rows:
+            typer.echo(f"{r['id']}  tag={r['tag']}  {r['created']}  {r['metrics']}")
     except typer.Exit:
         raise
     except Exception as e:

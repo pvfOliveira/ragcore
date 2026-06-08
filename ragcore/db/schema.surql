@@ -73,3 +73,11 @@ DEFINE FIELD IF NOT EXISTS created ON chat_message DEFAULT time::now() VALUE $be
 DEFINE EVENT IF NOT EXISTS chat_session_delete ON TABLE chat_session WHEN ($after == NONE) THEN {
     DELETE chat_message WHERE session == $before.id;
 };
+
+DEFINE TABLE IF NOT EXISTS eval_run SCHEMAFULL;
+DEFINE FIELD IF NOT EXISTS tag ON TABLE eval_run TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS dataset ON TABLE eval_run TYPE option<string>;
+DEFINE FIELD IF NOT EXISTS config_snapshot ON TABLE eval_run TYPE string;
+DEFINE FIELD IF NOT EXISTS metrics ON TABLE eval_run TYPE string;
+DEFINE FIELD IF NOT EXISTS gate_passed ON TABLE eval_run TYPE option<bool>;
+DEFINE FIELD IF NOT EXISTS created ON eval_run DEFAULT time::now() VALUE $before OR time::now();
