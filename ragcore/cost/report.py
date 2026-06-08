@@ -21,9 +21,11 @@ def build_report(agg: dict, rates: dict, bench) -> dict:
     for row in by_model:
         key = f"{row['provider']}:{row['model']}"
         tokens = row["prompt_tokens"] + row["completion_tokens"]
-        spend_usd[key] = tokens / 1000.0 * rates.get(key, 0.0)
+        spend = tokens / 1000.0 * rates.get(key, 0.0)
+        spend_usd[key] = spend_usd.get(key, 0.0) + spend
 
     total_spend_usd = sum(spend_usd.values())
+    spend_usd = {k: v for k, v in spend_usd.items() if v > 0.0}
 
     # --- cache summary ---
     hits = cache_raw["hits"]
@@ -88,11 +90,13 @@ def build_report(agg: dict, rates: dict, bench) -> dict:
                 best_latency = min(
                     (r.get("ttft_ms", float("inf")) for r in runs), default=None
                 )
+                if best_latency == float("inf"):
+                    best_latency = None
                 bench_summary = {
                     "best_throughput_tok_s": best_throughput,
                     "best_latency_ttft_ms": best_latency,
                 }
-        except Exception:  # noqa: BLE001 — never crash the report on bench parse errors
+        except (TypeError, AttributeError, ValueError, KeyError):
             bench_summary = None
 
     report: dict = {

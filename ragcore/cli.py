@@ -453,7 +453,7 @@ def cost_report_cmd():
         cfg, _ = _load()
         agg = CostLedger(cfg.cost.ledger_path).aggregate()
         bench_path = Path("data/bench/report.json")
-        bench = json.loads(bench_path.read_text()) if bench_path.exists() else None
+        bench = json.loads(bench_path.read_text(encoding="utf-8")) if bench_path.exists() else None
         rep = build_report(agg, cfg.cost.rates, bench)
 
         typer.echo("=== Cost Report ===")
@@ -485,10 +485,10 @@ def cost_report_cmd():
         if rep.get("bench_summary"):
             bs = rep["bench_summary"]
             typer.echo("")
-            typer.echo(
-                f"Bench:  best_throughput={bs['best_throughput_tok_s']:.1f} tok/s"
-                f"  best_ttft={bs['best_latency_ttft_ms']} ms"
-            )
+            bench_line = f"Bench:  best_throughput={bs['best_throughput_tok_s']:.1f} tok/s"
+            if bs["best_latency_ttft_ms"] is not None:
+                bench_line += f"  best_ttft={bs['best_latency_ttft_ms']} ms"
+            typer.echo(bench_line)
     except typer.Exit:
         raise
     except Exception as e:
