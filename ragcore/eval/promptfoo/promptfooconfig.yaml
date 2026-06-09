@@ -3,6 +3,11 @@
 description: ragcore answer-quality eval (local Ollama)
 providers:
   - id: ollama:chat:qwen2.5:7b-instruct
+# Grade llm-rubric assertions with the same local Ollama model instead of the
+# default OpenAI grader (which needs OPENAI_API_KEY) — keeps the eval fully local.
+defaultTest:
+  options:
+    provider: ollama:chat:qwen2.5:7b-instruct
 prompts:
   - |
     Answer the question using ONLY the context. Cite sources.
