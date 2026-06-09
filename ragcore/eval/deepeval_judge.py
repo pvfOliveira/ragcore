@@ -24,29 +24,20 @@ class DeepEvalJudge:
             "context_precision": ContextualPrecisionMetric(model=judge_model),
         }
 
+    def _make_test_case(self, record: dict):
+        """Build a DeepEval test case (lazy import). Overridden in deterministic
+        tests so the score() path can be exercised without deepeval installed."""
+        from deepeval.test_case import LLMTestCase
+        return LLMTestCase(
+            input=record["question"],
+            actual_output=record["answer"],
+            retrieval_context=list(record["contexts"]),
+            expected_output=record.get("ground_truth", ""),
+        )
+
     def score(self, metric: str, record: dict) -> float:
         if metric not in self._metrics:
             return 0.0
-
-        try:
-            from deepeval.test_case import LLMTestCase
-            test_case = LLMTestCase(
-                input=record["question"],
-                actual_output=record["answer"],
-                retrieval_context=list(record["contexts"]),
-                expected_output=record.get("ground_truth", ""),
-            )
-        except ModuleNotFoundError:
-            # deepeval not installed — construct a simple namespace that
-            # satisfies injected fake metrics in deterministic tests.
-            import types
-            test_case = types.SimpleNamespace(
-                input=record["question"],
-                actual_output=record["answer"],
-                retrieval_context=list(record["contexts"]),
-                expected_output=record.get("ground_truth", ""),
-            )
-
         m = self._metrics[metric]
-        m.measure(test_case)
+        m.measure(self._make_test_case(record))
         return float(m.score)

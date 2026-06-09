@@ -13,6 +13,7 @@ def test_deepeval_judge_honors_score_protocol():
         "answer_relevancy": _FakeMetric(0.8),
         "context_precision": _FakeMetric(0.7),
     }
+    judge._make_test_case = lambda record: object()
     rec = {"question": "q", "answer": "a", "contexts": ["c"], "ground_truth": "g"}
     assert judge.score("faithfulness", rec) == 0.9
     assert judge.score("answer_relevancy", rec) == 0.8
