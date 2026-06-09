@@ -9,3 +9,6 @@ ragcore.egg-info/
 
 # SurrealDB CLI REPL history (created by `surreal sql` during dev)
 history.txt
+
+# DeepEval telemetry/run cache (created by deepeval at runtime)
+.deepeval/

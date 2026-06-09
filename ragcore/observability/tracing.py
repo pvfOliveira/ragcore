@@ -11,9 +11,9 @@ _provider: Any = None  # cached OTel TracerProvider once built
 def _build_provider(config: Any):
     """Build a TracerProvider exporting to Phoenix's OTLP collector. Optionally
     also export to Langfuse if its keys are configured (code path only)."""
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
     provider = TracerProvider()
     obs = config.observability

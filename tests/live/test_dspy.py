@@ -27,6 +27,7 @@ def test_dspy_compiles_strategy_over_ollama(surreal_url, tmp_path):
 
     prompt = compile_strategy(cfg)
     assert "{{question}}" in prompt
+    assert "{{max_searches}}" in prompt
     assert load_compiled_strategy(cfg.dspy.compiled_path) == prompt
 
     run_id = asyncio.run(RunRegistry(cfg.surreal).record(
