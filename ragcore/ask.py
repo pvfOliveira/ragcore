@@ -32,6 +32,24 @@ def _render(template: str, data: dict) -> str:
     return Prompter(prompt_template=template, prompt_dir=_PROMPT_DIR).render(data=data)
 
 
+def _render_inline(template_text: str, data: dict) -> str:
+    """Render a raw template string (compiled prompts aren't files in prompt_dir)."""
+    from jinja2 import Template
+
+    return Template(template_text).render(**data)
+
+
+def _render_strategy(config, data: dict) -> str:
+    dspy_cfg = getattr(config, "dspy", None)
+    if dspy_cfg is not None and dspy_cfg.enabled:
+        from ragcore.dspy_optimizer import load_compiled_strategy
+
+        compiled = load_compiled_strategy(dspy_cfg.compiled_path)
+        if compiled is not None:
+            return _render_inline(compiled, data)
+    return _render("ask_strategy", data)
+
+
 def _clean(text: str) -> str:
     text = _THINK.sub("", text)
     # Strip a dangling, unclosed <think> ... (truncated reasoning) to end-of-string.
@@ -91,7 +109,7 @@ class AskState(TypedDict, total=False):
 
 async def _strategy(state: AskState) -> dict:
     cfg = state["_config"]
-    prompt = _render("ask_strategy", {"question": state["question"], "max_searches": 5})
+    prompt = _render_strategy(cfg, {"question": state["question"], "max_searches": 5})
     chat, provider, model = _select_and_build(cfg, content=state["question"],
                                               force_cloud=state.get("_force_cloud", False))
     msg = await _traced_invoke(cfg, chat, provider, model, prompt, "strategy")
