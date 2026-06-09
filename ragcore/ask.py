@@ -43,6 +43,10 @@ def _clean(text: str) -> str:
 
 def _select_and_build(config, content: str = "", force_cloud: bool = False):
     provider, model = select_model(config, "chat", content=content, force_cloud=force_cloud)
+    from ragcore.gateway import get_gateway
+    gateway = get_gateway(config)
+    if gateway is not None:
+        return gateway.chat_for(provider, model), provider, model
     return build_chat_model(provider, model), provider, model
 
 
