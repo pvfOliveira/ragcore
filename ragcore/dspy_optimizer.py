@@ -27,8 +27,7 @@ def save_compiled_strategy(path: str, prompt: str) -> None:
 
 def compile_strategy(config: Any, dataset_path: str | None = None) -> str:
     """Compile the strategy prompt with DSPy BootstrapFewShot over Ollama and
-    persist it to config.dspy.compiled_path. Returns the compiled prompt text.
-    Validated live in Task 12."""
+    persist it to config.dspy.compiled_path. Returns the compiled prompt text."""
     import dspy
 
     from ragcore.eval.harness import _DEFAULT_DATASET, _litellm_model, _load_dataset
@@ -37,7 +36,7 @@ def compile_strategy(config: Any, dataset_path: str | None = None) -> str:
     lm = dspy.LM(
         f"ollama_chat/{model_id.split('/', 1)[1]}",
         api_base="http://localhost:11434",
-    )  # verify form live (Task 12)
+    )
     dspy.configure(lm=lm)
 
     class StrategySig(dspy.Signature):
@@ -69,7 +68,7 @@ def compile_strategy(config: Any, dataset_path: str | None = None) -> str:
     compiled = optimizer.compile(program, trainset=trainset)
 
     # Extract the bootstrapped few-shot demos from the (single) optimized
-    # predictor. dspy 3.2.x stores them as ``dspy.Example`` objects on
+    # predictor. dspy stores them as ``dspy.Example`` objects on
     # ``predictor.demos`` (each exposes ``.get``); ``predictors()`` is the
     # canonical accessor and avoids depending on the program's attribute name.
     predictors = compiled.predictors()
