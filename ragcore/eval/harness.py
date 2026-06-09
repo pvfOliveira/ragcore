@@ -47,16 +47,27 @@ def compute_metrics(records: list[dict], *, judge: Any = None) -> dict[str, dict
 
     Each record is ``{question, answer, contexts, ground_truth}``. When ``judge``
     is injected (tests) the fixed per-record scores are aggregated directly; when
-    ``judge is None`` a local Ollama-backed judge is built lazily.
+    ``judge is None`` a local Ollama-backed judge is built lazily, selected by
+    ``config.eval.framework`` (default ``"ragas"``; ``"deepeval"`` uses
+    :class:`~ragcore.eval.deepeval_judge.DeepEvalJudge`).
     """
     if judge is None:
         from ragcore.config import load_config
 
-        judge = _OllamaJudge(load_config())
+        judge = _build_judge_for_framework(load_config())
     return {
         "ragas": _aggregate(RAGAS_METRICS, records, judge),
         "trulens": _aggregate(TRULENS_METRICS, records, judge),
     }
+
+
+def _build_judge_for_framework(config: Any):
+    """Select the judge implementation from config.eval.framework."""
+    framework = getattr(config.eval, "framework", "ragas")
+    if framework == "deepeval":
+        from ragcore.eval.deepeval_judge import DeepEvalJudge
+        return DeepEvalJudge(config)
+    return _OllamaJudge(config)
 
 
 def _patch_trulens_litellm_instrumentation() -> None:
