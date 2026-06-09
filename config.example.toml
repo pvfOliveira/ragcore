@@ -49,6 +49,7 @@ threshold = 0.95
 
 [eval]
 judge_model = "ollama:qwen3:8b"
+framework = "ragas"             # ragas | deepeval
 
 [llmops]
 tolerance = 0.05          # max allowed metric regression vs baseline
@@ -77,3 +78,21 @@ hops = 1                  # traversal depth
 model = "ViT-B-32"        # open_clip model name (requires ragcore[multimodal])
 pretrained = "laion2b_s34b_b79k"
 device = "mps"            # mps | cuda | cpu
+
+[observability]
+enabled = false                 # OTel-GenAI tracing of the ask pipeline
+backend = "phoenix"             # phoenix (in-process, live-proven)
+otlp_endpoint = "http://localhost:6006/v1/traces"
+# Langfuse is a wired OTLP exporter path, not a running dependency:
+# langfuse_host = "https://cloud.langfuse.com"
+# langfuse_public_key = "pk-..."
+# langfuse_secret_key = "sk-..."
+
+[gateway]
+enabled = false                 # route LLM calls through a LiteLLM gateway
+# fallback_chain = ["ollama/qwen2.5:7b-instruct"]
+
+[dspy]
+enabled = false                 # load a DSPy-compiled strategy prompt when present
+compiled_path = "data/dspy_compiled.json"
+max_demos = 4
