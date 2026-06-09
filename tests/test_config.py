@@ -73,7 +73,6 @@ def test_chat_config_default_and_override(tmp_path):
 
 
 def test_new_v2_config_defaults(tmp_path):
-    from ragcore.config import load_config
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text(
         "[models.chat]\nlocal_provider='ollama'\nlocal_model='qwen2.5:7b-instruct'\n"
@@ -88,18 +87,18 @@ def test_new_v2_config_defaults(tmp_path):
 
 
 def test_new_v2_config_overrides(tmp_path):
-    from ragcore.config import load_config
     cfg_file = tmp_path / "config.toml"
     cfg_file.write_text(
         "[models.chat]\nlocal_provider='ollama'\nlocal_model='qwen2.5:7b-instruct'\n"
         "[models.embedding]\nlocal_provider='ollama'\nlocal_model='nomic-embed-text'\n"
-        "[observability]\nenabled=true\nbackend='phoenix'\n"
+        "[observability]\nenabled=true\nbackend='langfuse'\n"
         "[gateway]\nenabled=true\nfallback_chain=['ollama/qwen2.5:7b-instruct']\n"
         "[dspy]\nenabled=true\n"
         "[eval]\nframework='deepeval'\n"
     )
     cfg = load_config(cfg_file)
     assert cfg.observability.enabled is True
+    assert cfg.observability.backend == "langfuse"
     assert cfg.gateway.fallback_chain == ["ollama/qwen2.5:7b-instruct"]
     assert cfg.dspy.enabled is True
     assert cfg.eval.framework == "deepeval"
