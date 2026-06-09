@@ -68,13 +68,28 @@ def compile_strategy(config: Any, dataset_path: str | None = None) -> str:
     )
     compiled = optimizer.compile(program, trainset=trainset)
 
-    demos = getattr(getattr(compiled, "predict", compiled), "demos", []) or []
+    # Extract the bootstrapped few-shot demos from the (single) optimized
+    # predictor. dspy 3.2.x stores them as ``dspy.Example`` objects on
+    # ``predictor.demos`` (each exposes ``.get``); ``predictors()`` is the
+    # canonical accessor and avoids depending on the program's attribute name.
+    predictors = compiled.predictors()
+    predictor = predictors[0] if predictors else compiled
+    demos = list(getattr(predictor, "demos", []) or [])
     demo_text = "\n".join(
-        f"Q: {d.get('question', '')}\nA: {d.get('searches', '')}" for d in demos
+        f"Q: {d.get('question', '')}\nA: {d.get('searches', '')}"
+        for d in demos
+        if d.get("question")
+    )
+    # The optimizer may also tune the signature instruction; prefer it.
+    sig = getattr(predictor, "signature", None)
+    instruction = (
+        getattr(sig, "instructions", None)
+        or "Decompose a question into up to N search terms (JSON list)."
     )
     prompt = (
-        "Decompose the question into up to {{max_searches}} search terms as "
-        'JSON {"searches": [...]}.\n'
+        f"{instruction}\n"
+        "Return up to {{max_searches}} search terms as JSON "
+        '{"searches": [...]}.\n'
         + (f"Examples:\n{demo_text}\n" if demo_text else "")
         + "Question: {{question}}"
     )
