@@ -1,0 +1,30 @@
+# Declarative eval of ragcore's answer prompt against local Ollama.
+# Run: promptfoo eval -c promptfooconfig.yaml -o results.json
+description: ragcore answer-quality eval (local Ollama)
+providers:
+  - id: ollama:chat:qwen2.5:7b-instruct
+# Grade llm-rubric assertions with the same local Ollama model instead of the
+# default OpenAI grader (which needs OPENAI_API_KEY) — keeps the eval fully local.
+defaultTest:
+  options:
+    provider: ollama:chat:qwen2.5:7b-instruct
+prompts:
+  - |
+    Answer the question using ONLY the context. Cite sources.
+    Context: {{context}}
+    Question: {{question}}
+tests:
+  - vars:
+      question: "Where is the Eiffel Tower?"
+      context: "The Eiffel Tower is in Paris, France, completed in 1889."
+    assert:
+      - type: contains
+        value: "Paris"
+      - type: llm-rubric
+        value: "The answer states the Eiffel Tower is in Paris."
+  - vars:
+      question: "Who built the Eiffel Tower?"
+      context: "The Eiffel Tower was built by Gustave Eiffel's company."
+    assert:
+      - type: contains
+        value: "Eiffel"

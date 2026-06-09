@@ -23,6 +23,8 @@ def patch_ask(monkeypatch):
         "FINAL synthesized answer [source:source:0]",  # final
     ])
     monkeypatch.setattr(ask_mod, "_build_chat", lambda config, content="", force_cloud=False: chat)
+    monkeypatch.setattr(ask_mod, "_select_and_build",
+                        lambda config, content="", force_cloud=False: (chat, "test", "test-model"))
 
     async def fake_hybrid(store, embedder_fn, query, k=10, **kwargs):
         return [{"id": "source_embedding:1", "source": "source:0", "content": f"ctx for {query}"}]
@@ -47,6 +49,8 @@ async def test_strategy_handles_non_object_json(monkeypatch):
     ])
     monkeypatch.setattr(ask_mod, "_build_chat",
                         lambda config, content="", force_cloud=False: chat)
+    monkeypatch.setattr(ask_mod, "_select_and_build",
+                        lambda config, content="", force_cloud=False: (chat, "test", "test-model"))
 
     async def fake_hybrid(store, embedder_fn, query, k=10, **kwargs):
         return [{"id": "source_embedding:1", "source": "source:0", "content": "ctx"}]

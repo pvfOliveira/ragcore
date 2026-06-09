@@ -172,6 +172,23 @@ Dependency direction is strict and one-way: **cli/web/worker → library → sto
 | `bench/harness.py` | `run_bench`: cartesian sweep, `OllamaBenchClient` via raw `urllib.request`. |
 | `bench/serving.py` | `vllm_serve`: design-only CUDA-gated stub; raises on no `nvidia-smi`. |
 
+### LLMOps & Observability v2 layer
+
+A fourth layer of industry-standard LLMOps tooling, every piece **opt-in and default-off**. The invariant that governs the whole layer: with its config flags unset, `ingest`/`ask`/`chat`/`retrieve` run byte-identical to the core — no traces emitted, no gateway hop, no optimized prompt loaded. Each capability is gated behind its own optional extra (`[observability]`, `[gateway]`, `[dspy]`; DeepEval + Promptfoo ride the existing `[eval]`).
+
+| Module | Role |
+|---|---|
+| `observability/attributes.py` | Helpers emitting the stable `gen_ai.*` OpenTelemetry-GenAI semantic-convention subset (`gen_ai.system`, `gen_ai.request.model`, token usage). |
+| `observability/tracing.py` | Lazy OTel `TracerProvider` → **Arize Phoenix** in-process collector; **Langfuse** wired as a second OTLP exporter *code path* (Basic-auth header), not a running dependency. `get_tracer` returns `None` (zero overhead) when observability is disabled. |
+| `eval/deepeval_judge.py` | **DeepEval** metrics behind a local-Ollama judge, selected via `config.eval.framework`. |
+| `eval/promptfoo/config.yaml` + runner | **Promptfoo** declarative eval driven through the Node `promptfoo` CLI (the YAML now ships in the wheel via `[tool.setuptools.package-data]`). |
+| `gateway.py` | **LiteLLM** unified gateway behind `routing.select_model`; opt-in `[gateway]`. The `ask` pipeline routes its model calls through it only when `config.gateway.enabled`. |
+| `dspy_optimizer.py` | **DSPy** strategy-prompt optimizer (`compile_strategy`/`load_compiled_strategy`) + the `optimize` CLI; the compiled prompt preserves the `{{question}}`/`{{max_searches}}` placeholders so the optimized strategy slots straight into the existing Jinja template. |
+
+**Eval framework selector.** `config.eval.framework` chooses among the Ragas+TruLens harness (`harness.py`), DeepEval (`deepeval_judge.py`), and Promptfoo (Node CLI) — three interchangeable graders over the same local judge.
+
+**Live proof (each capability has its own live test, all green):** `tests/live/test_observability.py` (Phoenix OTel trace captures an `ask`), `tests/live/test_eval_frameworks.py` (DeepEval gate + Promptfoo run over Ollama), `tests/live/test_gateway.py` (LiteLLM routes a real call to Ollama), `tests/live/test_dspy.py` (BootstrapFewShot compile produces a loadable artifact preserving both prompt placeholders).
+
 ---
 
 ## 5. Tech stack & why
@@ -487,6 +504,43 @@ ragcore graph build                              # back-fill triples for ingeste
 # Ollama serving benchmark (MPS; GPU serving is design-only on this host)
 ragcore bench                                    # sweep num_ctx × num_batch × concurrency
 ```
+
+### LLMOps & Observability v2 (optional extras)
+
+All default-off; with the flags unset, ingest/ask/chat/retrieve behave byte-identically to the core.
+
+```bash
+pip install -e ".[observability]"   # Arize Phoenix OTel tracing (Langfuse OTLP code path)
+pip install -e ".[gateway]"         # LiteLLM unified gateway
+pip install -e ".[dspy]"            # DSPy strategy-prompt optimizer
+pip install -e ".[eval]"            # now also installs DeepEval + pyyaml (Promptfoo is a Node CLI)
+# all of the above (plus the rag-upgrade set) at once:
+pip install -e ".[rag-upgrade]"
+npm install -g promptfoo            # Promptfoo runner is a global Node CLI, not a pip dep
+```
+
+Enable in `config.toml`:
+```toml
+[observability]
+enabled       = true
+otlp_endpoint = "http://localhost:6006/v1/traces"   # Phoenix
+
+[gateway]
+enabled = true
+
+[dspy]
+enabled       = true
+compiled_path = "data/dspy_compiled.json"
+
+[eval]
+framework = "deepeval"            # ragas (default) | deepeval | promptfoo
+```
+
+```bash
+ragcore optimize                                 # DSPy-compile the strategy prompt → compiled_path
+```
+
+> Known pin tension: `deepeval` requires `click<8.4.0` while `huggingface-hub`/`dspy` allow `>=8.4`; `pip check` surfaces one benign metadata warning depending on which click is resolved. Both import and the full suite stays green either way (see the comment above the `eval`/`dspy` extras in `pyproject.toml`).
 
 ### Tests / lint (dev workflow)
 

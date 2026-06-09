@@ -341,6 +341,24 @@ async def _dataset_centroid(cfg, dataset_path):
     return [sum(v[i] for v in vecs) / n for i in range(len(vecs[0]))]
 
 
+@app.command()
+def optimize(
+    dataset: Optional[str] = typer.Option(None, "--dataset", help="JSONL dataset to compile over"),
+):
+    """Compile the ask 'strategy' prompt with DSPy (BootstrapFewShot over Ollama)."""
+    try:
+        from ragcore.dspy_optimizer import compile_strategy
+
+        cfg = load_config(_state["config_path"])
+        prompt = compile_strategy(cfg, dataset)
+        typer.echo(f"Compiled strategy prompt saved to {cfg.dspy.compiled_path}")
+        typer.echo(prompt[:200])
+    except typer.Exit:
+        raise
+    except Exception as e:
+        _fail(e)
+
+
 @app.command("eval")
 def eval_cmd(
     dataset: Optional[str] = typer.Option(None, "--dataset", help="Path to a JSONL eval dataset"),

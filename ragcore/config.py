@@ -67,6 +67,7 @@ class CacheConfig(BaseModel):
 
 class EvalConfig(BaseModel):
     judge_model: str = "ollama:qwen3:8b"
+    framework: str = "ragas"          # ragas | deepeval
 
 
 class LlmopsConfig(BaseModel):
@@ -101,6 +102,28 @@ class MultimodalConfig(BaseModel):
     device: str = "mps"
 
 
+class ObservabilityConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "phoenix"          # phoenix (in-process) — live-proven backend
+    otlp_endpoint: str = "http://localhost:6006/v1/traces"  # Phoenix default collector
+    # Langfuse is a wired OTLP code path, NOT required to run for any proof.
+    langfuse_host: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+
+
+class GatewayConfig(BaseModel):
+    enabled: bool = False
+    # litellm model ids, tried in order; first is primary. e.g. "ollama/qwen2.5:7b-instruct"
+    fallback_chain: list[str] = []
+
+
+class DspyConfig(BaseModel):
+    enabled: bool = False
+    compiled_path: str = "data/dspy_compiled.json"
+    max_demos: int = 4                # keep the optimized task small
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -117,6 +140,9 @@ class Config(BaseModel):
     bench: BenchConfig = BenchConfig()
     graph: GraphConfig = GraphConfig()
     multimodal: MultimodalConfig = MultimodalConfig()
+    observability: ObservabilityConfig = ObservabilityConfig()
+    gateway: GatewayConfig = GatewayConfig()
+    dspy: DspyConfig = DspyConfig()
 
 
 def load_config(path: str | Path = "config.toml") -> Config:
@@ -145,4 +171,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         bench=BenchConfig(**data.get("bench", {})),
         graph=GraphConfig(**data.get("graph", {})),
         multimodal=MultimodalConfig(**data.get("multimodal", {})),
+        observability=ObservabilityConfig(**data.get("observability", {})),
+        gateway=GatewayConfig(**data.get("gateway", {})),
+        dspy=DspyConfig(**data.get("dspy", {})),
     )

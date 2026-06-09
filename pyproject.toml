@@ -30,6 +30,10 @@ milvus = ["pymilvus>=2.4", "milvus-lite>=2.4"]
 # langchain-community 0.4); pin <0.4 to keep that shim. trulens' transitive `munch`
 # imports pkg_resources, removed from setuptools>=81; pin setuptools<81. Neither
 # downgrades ragcore's langchain-core (stays 1.x) or langgraph.
+# KNOWN PIN TENSION: deepeval (<8.4.0) and dspy (allows >=8.4) disagree on `click`'s
+# upper bound, so `pip check` surfaces one benign metadata warning (click 8.4.x).
+# It is *not* a runtime breakage — deepeval, dspy and click all import and the full
+# suite (incl. the live tier) stays green; click's CLI surface they use is unchanged.
 eval = [
     "ragas>=0.2",
     "trulens-core>=1.0",
@@ -37,9 +41,23 @@ eval = [
     "datasets>=2.0",
     "langchain-community<0.4",
     "setuptools<81",
+    # >=4: deepeval 2.x imports `langchain_core.tracers.langchain_v1`, removed in
+    # langchain-core 1.x (which ragcore pins); a looser bound lets the resolver
+    # silently downgrade and break imports. 4.x is langchain-core-1.x clean.
+    "deepeval>=4",
+    "pyyaml>=6",
 ]
 multimodal = ["open_clip_torch>=2.24", "torch>=2.2", "pillow>=10"]
-rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval,multimodal]"]
+# In-process OTel-GenAI tracing → Arize Phoenix (Langfuse wired as an OTLP code path).
+observability = [
+    "arize-phoenix>=4",
+    "openinference-instrumentation>=0.1",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp>=1.20",
+]
+gateway = ["litellm>=1.40"]
+dspy = ["dspy>=2.5"]
+rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval,multimodal,observability,gateway,dspy]"]
 
 [project.scripts]
 ragcore = "ragcore.cli:app"
@@ -53,6 +71,10 @@ build-backend = "setuptools.build_meta"
 # packages discovered: ['data', 'ragcore']"). Ship only the ragcore package tree.
 [tool.setuptools.packages.find]
 include = ["ragcore*"]
+
+# Ship the promptfoo eval config (a non-.py data file) inside the built wheel/sdist.
+[tool.setuptools.package-data]
+"ragcore.eval.promptfoo" = ["*.yaml"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
