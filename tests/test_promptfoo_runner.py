@@ -20,6 +20,7 @@ def test_parse_promptfoo_results_to_metrics(tmp_path):
 
 def test_promptfooconfig_yaml_is_valid():
     import importlib.resources as r
+
     import yaml
     text = (r.files("ragcore.eval.promptfoo") / "promptfooconfig.yaml").read_text()
     doc = yaml.safe_load(text)

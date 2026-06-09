@@ -7,7 +7,6 @@ import json
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
 
 _CONFIG = Path(__file__).parent / "promptfooconfig.yaml"
 
@@ -16,7 +15,7 @@ def promptfoo_available() -> bool:
     return shutil.which("promptfoo") is not None
 
 
-def run_promptfoo(out_path: str | Path = "data/eval/promptfoo.json") -> dict:
+def run_promptfoo(out_path: str | Path = "data/eval/promptfoo.json") -> dict[str, dict[str, float]]:
     """Run `promptfoo eval` and return the parsed metric dict. Raises if the CLI
     is absent (callers in the live tier guard with ``promptfoo_available``)."""
     if not promptfoo_available():
