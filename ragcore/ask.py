@@ -16,6 +16,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
 
 from ragcore.cache import SemanticCache
+from ragcore.observability.otel import set_gen_ai_attributes
+from ragcore.observability.spans import traced_span
+from ragcore.observability.tracing import get_tracer
 from ragcore.providers import build_chat_model
 from ragcore.rerank import rerank
 from ragcore.retrieve import hybrid_search, vector_store_for
@@ -38,9 +41,29 @@ def _clean(text: str) -> str:
     return text.strip()
 
 
-def _build_chat(config, content: str = "", force_cloud: bool = False):
+def _select_and_build(config, content: str = "", force_cloud: bool = False):
     provider, model = select_model(config, "chat", content=content, force_cloud=force_cloud)
-    return build_chat_model(provider, model)
+    return build_chat_model(provider, model), provider, model
+
+
+def _build_chat(config, content: str = "", force_cloud: bool = False):
+    chat, _provider, _model = _select_and_build(config, content, force_cloud)
+    return chat
+
+
+async def _traced_invoke(config, chat, provider, model, prompt: str, operation: str):
+    """Invoke the chat model inside a gen_ai span (no-op when tracing disabled)."""
+    tracer = get_tracer(config)
+    with traced_span(tracer, f"{operation} {model}") as span:
+        msg = await chat.ainvoke(prompt)
+        if span is not None:
+            from ragcore.chunking import token_count
+            set_gen_ai_attributes(
+                span, system=provider, operation=operation, model=model,
+                input_tokens=token_count(prompt),
+                output_tokens=token_count(getattr(msg, "content", "") or ""),
+            )
+        return msg
 
 
 class AskState(TypedDict, total=False):
@@ -56,9 +79,11 @@ class AskState(TypedDict, total=False):
 
 
 async def _strategy(state: AskState) -> dict:
+    cfg = state["_config"]
     prompt = _render("ask_strategy", {"question": state["question"], "max_searches": 5})
-    chat = _build_chat(state["_config"], content=state["question"], force_cloud=state.get("_force_cloud", False))
-    msg = await chat.ainvoke(prompt)
+    chat, provider, model = _select_and_build(cfg, content=state["question"],
+                                              force_cloud=state.get("_force_cloud", False))
+    msg = await _traced_invoke(cfg, chat, provider, model, prompt, "strategy")
     try:
         parsed = json.loads(_clean(msg.content))
         searches = parsed.get("searches", []) if isinstance(parsed, dict) else []
@@ -80,18 +105,19 @@ async def _retrieve_answer(state: dict) -> dict:
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
-    chat = _build_chat(state["_config"], force_cloud=state.get("_force_cloud", False))
-    msg = await chat.ainvoke(prompt)
+    chat, provider, model = _select_and_build(cfg, force_cloud=state.get("_force_cloud", False))
+    msg = await _traced_invoke(cfg, chat, provider, model, prompt, "retrieve_answer")
     cites = [c["source"] for c in chunks]
     return {"answers": [{"answer": _clean(msg.content), "citations": cites}]}
 
 
 async def _synthesize(state: AskState) -> dict:
+    cfg = state["_config"]
     partials = [a["answer"] for a in state["answers"]]
     citations = sorted({c for a in state["answers"] for c in a["citations"]})
     prompt = _render("ask_final", {"question": state["question"], "answers": partials})
-    chat = _build_chat(state["_config"], force_cloud=state.get("_force_cloud", False))
-    msg = await chat.ainvoke(prompt)
+    chat, provider, model = _select_and_build(cfg, force_cloud=state.get("_force_cloud", False))
+    msg = await _traced_invoke(cfg, chat, provider, model, prompt, "synthesize")
     return {"answer": _clean(msg.content), "citations": citations}
 
 
@@ -144,7 +170,7 @@ def _record_usage(config, question: str, answer: str, *, cached: bool,
     )
 
 
-async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+async def _answer_question_inner(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
     # Budget enforcement: check BEFORE any LLM call.
     if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
         if config.cost.enforce:
@@ -188,3 +214,11 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
     citations = result.get("citations", [])
     _record_usage(config, question, answer, cached=False, force_cloud=force_cloud)
     return {"answer": answer, "citations": citations}
+
+
+async def answer_question(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    tracer = get_tracer(config)
+    with traced_span(tracer, "ask") as root:
+        if root is not None:
+            root.set_attribute("ragcore.question_chars", len(question))
+        return await _answer_question_inner(question, store, config, embedder_fn, force_cloud)
