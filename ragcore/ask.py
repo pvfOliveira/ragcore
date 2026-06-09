@@ -46,23 +46,30 @@ def _select_and_build(config, content: str = "", force_cloud: bool = False):
     return build_chat_model(provider, model), provider, model
 
 
+# Kept for test-monkeypatching compatibility; production callers use _select_and_build.
 def _build_chat(config, content: str = "", force_cloud: bool = False):
     chat, _provider, _model = _select_and_build(config, content, force_cloud)
     return chat
 
 
-async def _traced_invoke(config, chat, provider, model, prompt: str, operation: str):
-    """Invoke the chat model inside a gen_ai span (no-op when tracing disabled)."""
+async def _traced_invoke(config, chat, provider, model, prompt: str, stage: str):
+    """Invoke the chat model inside a gen_ai span (no-op when tracing disabled).
+
+    The span name carries the pipeline stage for readability, but the OTel
+    GenAI ``gen_ai.operation.name`` stays the conformant value ``"chat"``; the
+    stage goes in a separate ``ragcore.pipeline.stage`` attribute.
+    """
     tracer = get_tracer(config)
-    with traced_span(tracer, f"{operation} {model}") as span:
+    with traced_span(tracer, f"{stage} {model}") as span:
         msg = await chat.ainvoke(prompt)
         if span is not None:
             from ragcore.chunking import token_count
             set_gen_ai_attributes(
-                span, system=provider, operation=operation, model=model,
+                span, system=provider, operation="chat", model=model,
                 input_tokens=token_count(prompt),
                 output_tokens=token_count(getattr(msg, "content", "") or ""),
             )
+            span.set_attribute("ragcore.pipeline.stage", stage)
         return msg
 
 

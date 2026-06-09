@@ -124,6 +124,9 @@ def test_ask_emits_root_and_gen_ai_spans(monkeypatch):
     gen_ai = [s for s in spans if s.attributes.get("gen_ai.system") == "ollama"]
     assert gen_ai, "expected at least one gen_ai span with stable attributes"
     assert gen_ai[0].attributes["gen_ai.request.model"] == "qwen2.5:7b-instruct"
+    assert gen_ai[0].attributes["gen_ai.operation.name"] == "chat"
+    stages = {s.attributes.get("ragcore.pipeline.stage") for s in gen_ai}
+    assert {"strategy", "retrieve_answer", "synthesize"} <= stages
 
     _set_provider_for_test(None)
 
