@@ -40,3 +40,16 @@ async def test_unknown_strategy_raises():
     async def chat(_): return ""
     with pytest.raises(ValueError):
         await rewrite_query("q", cfg, chat)
+
+
+async def test_expand_and_fuse_runs_search_per_variant():
+    from ragcore import query_rewrite as qr
+    calls = []
+    async def fake_search(term):
+        calls.append(term)
+        return [{"id": f"{term}-1", "content": term, "source": "s", "score": 1.0}]
+    cfg = _Cfg(enabled=True, strategy="multi_query", n=2)
+    async def chat(_): return "1. a\n2. b"
+    fused = await qr.expand_and_fuse("orig", cfg, chat, fake_search, k=10)
+    assert calls == ["a", "b"]
+    assert {c["id"] for c in fused} == {"a-1", "b-1"}

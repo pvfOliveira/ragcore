@@ -41,3 +41,15 @@ async def rewrite_query(query: str, config, chat_fn) -> list[str]:
         text = await chat_fn(_render("query_decompose", {"query": query, "n": cfg.n}))
         return _parse_lines(text)[: cfg.n] or [query]
     raise ValueError(f"Unknown query_rewrite strategy {cfg.strategy!r}")
+
+
+async def expand_and_fuse(query: str, config, chat_fn, search_fn, k: int = 10):
+    """Rewrite *query* into variants, run *search_fn(term)->list[chunk]* for each,
+    and fuse the per-variant rankings via RRF. Returns up to k chunks."""
+    from ragcore.retrieve import reciprocal_rank_fusion
+
+    variants = await rewrite_query(query, config, chat_fn)
+    rankings = []
+    for term in variants:
+        rankings.append(await search_fn(term))
+    return reciprocal_rank_fusion(rankings, key="id", k=60)[:k]

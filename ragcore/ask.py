@@ -130,7 +130,19 @@ async def _retrieve_answer(state: dict) -> dict:
     cfg = state.get("_config")
     vector_store = vector_store_for(cfg)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
-    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
+    async def _search(term: str):
+        return await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
+
+    if cfg is not None and getattr(cfg, "query_rewrite", None) is not None and cfg.query_rewrite.enabled:
+        from ragcore.query_rewrite import expand_and_fuse
+        chat_qr, p_qr, m_qr = _select_and_build(cfg, force_cloud=state.get("_force_cloud", False))
+        async def _chat_fn(prompt: str):
+            msg = await _traced_invoke(cfg, chat_qr, p_qr, m_qr, prompt, "query_rewrite")
+            return _clean(msg.content)
+        chunks = await expand_and_fuse(term, cfg, _chat_fn, _search, k=10)
+    else:
+        chunks = await _search(term)
+
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
