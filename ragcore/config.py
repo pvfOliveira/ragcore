@@ -136,6 +136,14 @@ class AgenticConfig(BaseModel):
     min_relevant: int = 2
 
 
+class StructuredConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "instructor"     # instructor | outlines
+    ollama_base_url: str = "http://localhost:11434/v1"
+    model: str = "qwen2.5:7b-instruct"
+    outlines_model: str = "HuggingFaceTB/SmolLM2-135M-Instruct"  # tiny local model on MPS
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -145,6 +153,7 @@ class Config(BaseModel):
     chat: ChatConfig = ChatConfig()
     query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
     agentic: AgenticConfig = AgenticConfig()
+    structured: "StructuredConfig" = StructuredConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -178,6 +187,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         chat=ChatConfig(**data.get("chat", {})),
         query_rewrite=QueryRewriteConfig(**data.get("query_rewrite", {})),
         agentic=AgenticConfig(**data.get("agentic", {})),
+        structured=StructuredConfig(**data.get("structured", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),

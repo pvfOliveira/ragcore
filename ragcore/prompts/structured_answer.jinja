@@ -1,0 +1,7 @@
+Answer the question using ONLY the context. Provide your answer, the source ids you
+used as citations, and a confidence in [0,1].
+
+Context:
+{% for c in chunks %}- ({{ c.source }}) {{ c.content }}
+{% endfor %}
+Question: {{ question }}
