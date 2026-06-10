@@ -252,7 +252,9 @@ async def ingest_image(path: str, config: Any) -> tuple[str, bool]:
     from ragcore.docai import caption_image
     caption = caption_image(path, config)
     if caption:
+        from ragcore.embedding import generate_embedding
         from ragcore.store import Store
+        caption_embedding = await generate_embedding(caption, config)
         text_store = Store(config.surreal)
         source_id = await text_store.create_source(
             title=f"[image caption] {path}",
@@ -261,7 +263,7 @@ async def ingest_image(path: str, config: Any) -> tuple[str, bool]:
         )
         await text_store.add_embeddings(
             source_id,
-            [{"order": 0, "content": caption, "embedding": [0.0]}],
+            [{"order": 0, "content": caption, "embedding": caption_embedding}],
         )
 
     return image_id, True
