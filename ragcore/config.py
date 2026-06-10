@@ -130,6 +130,12 @@ class QueryRewriteConfig(BaseModel):
     n: int = 3
 
 
+class AgenticConfig(BaseModel):
+    enabled: bool = False
+    max_iterations: int = 2
+    min_relevant: int = 2
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -138,6 +144,7 @@ class Config(BaseModel):
     worker: WorkerConfig = WorkerConfig()
     chat: ChatConfig = ChatConfig()
     query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
+    agentic: AgenticConfig = AgenticConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -170,6 +177,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         worker=WorkerConfig(**data.get("worker", {})),
         chat=ChatConfig(**data.get("chat", {})),
         query_rewrite=QueryRewriteConfig(**data.get("query_rewrite", {})),
+        agentic=AgenticConfig(**data.get("agentic", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
