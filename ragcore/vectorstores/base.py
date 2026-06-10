@@ -48,6 +48,7 @@ def make_vector_store(config: typing.Any) -> VectorStore:
     - ``"chroma"``   — ``ragcore.vectorstores.chroma_store`` (Task 3).
     - ``"faiss"``    — ``ragcore.vectorstores.faiss_store`` (Task 4).
     - ``"milvus"``   — ``ragcore.vectorstores.milvus_store`` (Task 5).
+    - ``"qdrant"``   — ``ragcore.vectorstores.qdrant_store`` (Task 10).
     - anything else  — raises ``ValueError``.
 
     The chroma/faiss/milvus branches are wired lazily; they will raise an
@@ -83,7 +84,16 @@ def make_vector_store(config: typing.Any) -> VectorStore:
             uri=config.store.milvus_uri, collection=config.store.collection
         )
 
+    if backend == "qdrant":
+        from ragcore.vectorstores.qdrant_store import (
+            QdrantStore,  # type: ignore[import]
+        )
+
+        return QdrantStore(
+            path=config.store.qdrant_path, collection=config.store.collection
+        )
+
     raise ValueError(
         f"Unknown vector_backend {backend!r}. "
-        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus'."
+        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus', 'qdrant'."
     )

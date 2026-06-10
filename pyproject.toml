@@ -58,7 +58,8 @@ observability = [
 gateway = ["litellm>=1.40"]
 dspy = ["dspy>=2.5"]
 structured = ["instructor>=1.3", "outlines>=0.1", "openai>=1.40"]
-rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,eval,multimodal,observability,gateway,dspy,structured]"]
+qdrant = ["qdrant-client>=1.9"]
+rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured]"]
 
 [project.scripts]
 ragcore = "ragcore.cli:app"
