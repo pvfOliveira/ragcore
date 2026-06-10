@@ -41,3 +41,24 @@ async def test_unknown_backend_raises():
     cfg = _Cfg(enabled=True, backend="bogus")
     with pytest.raises(ValueError):
         await generate_structured("q", Answer, cfg)
+
+
+async def test_answer_structured_retrieves_then_generates(monkeypatch):
+    import ragcore.ask as ask
+
+    async def fake_hybrid(store, emb, q, k=10, config=None, **kw):
+        return [{"id": "1", "content": "rrf fuses ranks", "source": "s1"}]
+    monkeypatch.setattr("ragcore.ask.hybrid_search", fake_hybrid)
+    monkeypatch.setattr("ragcore.ask.vector_store_for", lambda c: None)
+
+    async def fake_gen(prompt, schema, config):
+        assert "rrf fuses ranks" in prompt   # the retrieved context reached the prompt
+        return schema(answer="A", citations=["s1"], confidence=0.7)
+    monkeypatch.setattr("ragcore.structured.generate_structured", fake_gen)
+
+    class Cfg:
+        structured = StructuredConfig(enabled=True, backend="instructor")
+        store = type("S", (), {"vector_backend": "surreal"})()
+    out = await ask.answer_structured("what is rrf?", store=object(), config=Cfg(),
+                                      embedder_fn=lambda x: [0.0])
+    assert out.answer == "A" and out.confidence == 0.7

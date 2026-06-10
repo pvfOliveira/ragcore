@@ -233,13 +233,20 @@ def ask(
     question: str,
     cloud: bool = typer.Option(False, "--cloud", help="Force cloud escalation"),
     agentic: bool = typer.Option(False, "--agentic", help="Use the corrective agentic-RAG loop"),
+    structured: bool = typer.Option(False, "--structured", help="Return a schema-validated JSON answer"),
 ):
     """Ask a question over the ingested corpus."""
     try:
-        from ragcore.ask import answer_question
         cfg, store = _load()
         if agentic:
             cfg.agentic.enabled = True
+        if structured:
+            from ragcore.ask import answer_structured
+            cfg.structured.enabled = True
+            result = asyncio.run(answer_structured(question, store, cfg, _embedder(cfg), force_cloud=cloud))
+            typer.echo(result.model_dump_json(indent=2))
+            return
+        from ragcore.ask import answer_question
         result = asyncio.run(answer_question(question, store, cfg, _embedder(cfg), force_cloud=cloud))
         typer.echo(result["answer"])
         if result["citations"]:

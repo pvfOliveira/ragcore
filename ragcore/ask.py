@@ -14,6 +14,7 @@ from typing import Annotated, Any, TypedDict
 from ai_prompter import Prompter
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
+from pydantic import BaseModel
 
 from ragcore.cache import SemanticCache
 from ragcore.observability.otel import set_gen_ai_attributes
@@ -281,3 +282,19 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         if root is not None:
             root.set_attribute("ragcore.question_chars", len(question))
         return await _answer_question_inner(question, store, config, embedder_fn, force_cloud)
+
+
+class StructuredAnswer(BaseModel):
+    answer: str
+    citations: list[str] = []
+    confidence: float = 0.0
+
+
+async def answer_structured(question: str, store, config, embedder_fn, force_cloud: bool = False):
+    """Retrieve as usual, then synthesise a schema-validated answer object."""
+    from ragcore.structured import generate_structured, _render as _srender
+    vector_store = vector_store_for(config)
+    extra = {"vector_store": vector_store} if vector_store is not None else {}
+    chunks = await hybrid_search(store, embedder_fn, question, k=10, config=config, **extra)
+    prompt = _srender("structured_answer", {"question": question, "chunks": chunks})
+    return await generate_structured(prompt, StructuredAnswer, config)
