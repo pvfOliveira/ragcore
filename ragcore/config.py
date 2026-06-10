@@ -124,6 +124,12 @@ class DspyConfig(BaseModel):
     max_demos: int = 4                # keep the optimized task small
 
 
+class QueryRewriteConfig(BaseModel):
+    enabled: bool = False
+    strategy: str = "multi_query"   # multi_query | hyde | decompose
+    n: int = 3
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -131,6 +137,7 @@ class Config(BaseModel):
     surreal: SurrealConfig = SurrealConfig()
     worker: WorkerConfig = WorkerConfig()
     chat: ChatConfig = ChatConfig()
+    query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -162,6 +169,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         surreal=SurrealConfig(**data.get("surreal", {})),
         worker=WorkerConfig(**data.get("worker", {})),
         chat=ChatConfig(**data.get("chat", {})),
+        query_rewrite=QueryRewriteConfig(**data.get("query_rewrite", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
