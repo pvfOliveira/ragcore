@@ -101,6 +101,8 @@ class MultimodalConfig(BaseModel):
     model: str = "ViT-B-32"
     pretrained: str = "laion2b_s34b_b79k"
     device: str = "mps"
+    vlm_enabled: bool = False
+    vlm_model: str = "moondream"   # small Ollama vision model
 
 
 class ObservabilityConfig(BaseModel):
@@ -145,6 +147,11 @@ class StructuredConfig(BaseModel):
     outlines_model: str = "HuggingFaceTB/SmolLM2-135M-Instruct"  # tiny local model on MPS
 
 
+class DocaiConfig(BaseModel):
+    enabled: bool = False
+    parser: str = "docling"        # docling | pymupdf (fallback)
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -155,6 +162,7 @@ class Config(BaseModel):
     query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
     agentic: AgenticConfig = AgenticConfig()
     structured: "StructuredConfig" = StructuredConfig()
+    docai: "DocaiConfig" = DocaiConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -189,6 +197,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         query_rewrite=QueryRewriteConfig(**data.get("query_rewrite", {})),
         agentic=AgenticConfig(**data.get("agentic", {})),
         structured=StructuredConfig(**data.get("structured", {})),
+        docai=DocaiConfig(**data.get("docai", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
