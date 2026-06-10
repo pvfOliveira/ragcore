@@ -34,4 +34,10 @@ async def rewrite_query(query: str, config, chat_fn) -> list[str]:
     if cfg.strategy == "multi_query":
         text = await chat_fn(_render("query_multi", {"query": query, "n": cfg.n}))
         return _parse_lines(text)[: cfg.n] or [query]
+    if cfg.strategy == "hyde":
+        text = await chat_fn(_render("query_hyde", {"query": query}))
+        return [text.strip() or query]
+    if cfg.strategy == "decompose":
+        text = await chat_fn(_render("query_decompose", {"query": query, "n": cfg.n}))
+        return _parse_lines(text)[: cfg.n] or [query]
     raise ValueError(f"Unknown query_rewrite strategy {cfg.strategy!r}")
