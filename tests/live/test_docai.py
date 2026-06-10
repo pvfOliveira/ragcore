@@ -59,7 +59,8 @@ def test_vlm_captions_image(surreal_url):
         cap = caption_image(str(FIX / "diagram.png"), Cfg())
     except Exception as e:
         pytest.xfail(f"No local vision model / Ollama vision unavailable: {e}")
-    assert isinstance(cap, str) and cap
+    words = [w for w in cap.replace(",", " ").split() if w.isalpha()]
+    assert isinstance(cap, str) and len(words) >= 3, f"caption too weak to prove VLM: {cap!r}"
     run_id = _record("vlm", surreal_url, {"vlm": {"caption_len": float(len(cap))}})
     assert run_id
     print(f"\n  [vlm] model=moondream, caption_len={len(cap)}, run_id={run_id}")
