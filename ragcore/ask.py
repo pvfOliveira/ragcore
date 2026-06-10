@@ -290,8 +290,12 @@ class StructuredAnswer(BaseModel):
     confidence: float = 0.0
 
 
-async def answer_structured(question: str, store, config, embedder_fn, force_cloud: bool = False):
-    """Retrieve as usual, then synthesise a schema-validated answer object."""
+async def answer_structured(question: str, store, config, embedder_fn):
+    """Retrieve as usual, then synthesise a schema-validated answer object.
+
+    Structured backends (instructor/outlines) run against the local Ollama model
+    in ``config.structured.model``; there is no cloud-escalation path here, so this
+    intentionally takes no ``force_cloud`` (unlike ``answer_question``)."""
     from ragcore.structured import generate_structured, _render as _srender
     vector_store = vector_store_for(config)
     extra = {"vector_store": vector_store} if vector_store is not None else {}

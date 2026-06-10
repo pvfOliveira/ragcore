@@ -243,7 +243,7 @@ def ask(
         if structured:
             from ragcore.ask import answer_structured
             cfg.structured.enabled = True
-            result = asyncio.run(answer_structured(question, store, cfg, _embedder(cfg), force_cloud=cloud))
+            result = asyncio.run(answer_structured(question, store, cfg, _embedder(cfg)))
             typer.echo(result.model_dump_json(indent=2))
             return
         from ragcore.ask import answer_question
