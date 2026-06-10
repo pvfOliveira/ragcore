@@ -22,3 +22,18 @@ def parse_document(path: str, config) -> str:
     if cfg.parser == "pymupdf":
         return _parse_pymupdf(path)
     raise ValueError(f"Unknown docai parser {cfg.parser!r}")
+
+
+_DOC_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".tiff"}
+
+
+def extract_if_document(origin: str, config) -> str | None:
+    """If docai is enabled and *origin* is a parseable document, return its markdown;
+    otherwise None so the caller uses its normal extraction path."""
+    from pathlib import Path
+    cfg = getattr(config, "docai", None)
+    if cfg is None or not cfg.enabled:
+        return None
+    if Path(origin).suffix.lower() not in _DOC_SUFFIXES:
+        return None
+    return parse_document(origin, config)

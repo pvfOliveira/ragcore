@@ -39,7 +39,12 @@ async def ingest_source(
     if existing:
         return IngestResult(source_id=existing, created=False)
     extracted = await _extract(path_or_url)
-    content = extracted["content"]
+    from ragcore.docai import extract_if_document
+    _doc_md = extract_if_document(path_or_url, config)
+    if _doc_md is not None:
+        content = _doc_md
+    else:
+        content = extracted["content"]
     if not content.strip():
         raise ValueError(f"No content extracted from {path_or_url}")
     source_id = await store.create_source(
