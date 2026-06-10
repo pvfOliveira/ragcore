@@ -24,3 +24,25 @@ def test_ingest_uses_docai_for_pdf(monkeypatch, tmp_path):
     assert text == "extracted markdown body"
     # non-document path returns None (caller falls back to existing extraction)
     assert docai.extract_if_document(str(tmp_path / "f.txt"), cfg) is None
+
+
+def test_caption_image_uses_ollama(monkeypatch, tmp_path):
+    import ragcore.docai as docai
+    monkeypatch.setattr(docai, "_ollama_caption",
+                        lambda model, path: "a diagram of reciprocal rank fusion")
+
+    class MM:
+        vlm_enabled = True
+        vlm_model = "moondream"
+    class Cfg:
+        multimodal = MM()
+    img = tmp_path / "i.png"; img.write_bytes(b"\x89PNG")
+    cap = docai.caption_image(str(img), Cfg())
+    assert "reciprocal rank fusion" in cap
+
+    class MMoff:
+        vlm_enabled = False
+        vlm_model = "moondream"
+    class CfgOff:
+        multimodal = MMoff()
+    assert docai.caption_image(str(img), CfgOff()) is None

@@ -37,3 +37,23 @@ def extract_if_document(origin: str, config) -> str | None:
     if Path(origin).suffix.lower() not in _DOC_SUFFIXES:
         return None
     return parse_document(origin, config)
+
+
+def _ollama_caption(model: str, path: str) -> str:
+    import ollama                                           # lazy — uses local Ollama
+    resp = ollama.chat(model=model, messages=[{
+        "role": "user",
+        "content": "Describe this image in one concise sentence for search indexing.",
+        "images": [path],
+    }])
+    return resp["message"]["content"].strip()
+
+
+def caption_image(path: str, config) -> str | None:
+    """Return a VLM caption for *path* when multimodal.vlm_enabled, else None.
+
+    Local vision is weak — this is an image→caption→text-index assist, NOT doc-VQA."""
+    mm = getattr(config, "multimodal", None)
+    if mm is None or not getattr(mm, "vlm_enabled", False):
+        return None
+    return _ollama_caption(mm.vlm_model, path)
