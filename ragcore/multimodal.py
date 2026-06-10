@@ -229,6 +229,11 @@ async def ingest_image(path: str, config: Any) -> tuple[str, bool]:
 
     Returns ``(image_id, created)`` where *created* is False when the origin
     was already ingested (dedup pre-flight skips the expensive CLIP call).
+
+    When ``multimodal.vlm_enabled`` is True, a VLM caption is generated and
+    stored as a ``source_embedding`` row so the image is reachable by BM25 /
+    hybrid text search.  When disabled (default) the path is byte-identical to
+    the pre-caption implementation.
     """
     store = ImageStore(config.surreal)
     existing = await store.find_by_origin(path)
@@ -242,4 +247,23 @@ async def ingest_image(path: str, config: Any) -> tuple[str, bool]:
     )
     emb = embedder.embed_image(path)
     image_id = await store.add_image(origin=path, path=path, embedding=emb)
+
+    # --- VLM caption → searchable text index (opt-in) ---
+    from ragcore.docai import caption_image
+    caption = caption_image(path, config)
+    if caption:
+        from ragcore.embedding import generate_embedding
+        from ragcore.store import Store
+        caption_embedding = await generate_embedding(caption, config)
+        text_store = Store(config.surreal)
+        source_id = await text_store.create_source(
+            title=f"[image caption] {path}",
+            full_text=caption,
+            origin=path,
+        )
+        await text_store.add_embeddings(
+            source_id,
+            [{"order": 0, "content": caption, "embedding": caption_embedding}],
+        )
+
     return image_id, True

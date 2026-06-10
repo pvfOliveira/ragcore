@@ -45,12 +45,13 @@ class ChatConfig(BaseModel):
 
 
 class StoreConfig(BaseModel):
-    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus
+    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus | qdrant
     # Persistence locations for the pluggable backends. Defaults live under the
     # repo `data/` dir; only the selected backend's location is used.
     chroma_path: str = "data/chroma"
     faiss_path: str = "data/faiss"
     milvus_uri: str = "data/milvus.db"
+    qdrant_path: str = "data/qdrant"
     collection: str = "ragcore"
 
 
@@ -100,6 +101,8 @@ class MultimodalConfig(BaseModel):
     model: str = "ViT-B-32"
     pretrained: str = "laion2b_s34b_b79k"
     device: str = "mps"
+    vlm_enabled: bool = False
+    vlm_model: str = "moondream"   # small Ollama vision model
 
 
 class ObservabilityConfig(BaseModel):
@@ -124,6 +127,31 @@ class DspyConfig(BaseModel):
     max_demos: int = 4                # keep the optimized task small
 
 
+class QueryRewriteConfig(BaseModel):
+    enabled: bool = False
+    strategy: str = "multi_query"   # multi_query | hyde | decompose
+    n: int = 3
+
+
+class AgenticConfig(BaseModel):
+    enabled: bool = False
+    max_iterations: int = 2
+    min_relevant: int = 2
+
+
+class StructuredConfig(BaseModel):
+    enabled: bool = False
+    backend: str = "instructor"     # instructor | outlines
+    ollama_base_url: str = "http://localhost:11434/v1"
+    model: str = "qwen2.5:7b-instruct"
+    outlines_model: str = "HuggingFaceTB/SmolLM2-135M-Instruct"  # tiny local model on MPS
+
+
+class DocaiConfig(BaseModel):
+    enabled: bool = False
+    parser: str = "docling"        # docling | pymupdf (fallback)
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -131,6 +159,10 @@ class Config(BaseModel):
     surreal: SurrealConfig = SurrealConfig()
     worker: WorkerConfig = WorkerConfig()
     chat: ChatConfig = ChatConfig()
+    query_rewrite: QueryRewriteConfig = QueryRewriteConfig()
+    agentic: AgenticConfig = AgenticConfig()
+    structured: "StructuredConfig" = StructuredConfig()
+    docai: "DocaiConfig" = DocaiConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -162,6 +194,10 @@ def load_config(path: str | Path = "config.toml") -> Config:
         surreal=SurrealConfig(**data.get("surreal", {})),
         worker=WorkerConfig(**data.get("worker", {})),
         chat=ChatConfig(**data.get("chat", {})),
+        query_rewrite=QueryRewriteConfig(**data.get("query_rewrite", {})),
+        agentic=AgenticConfig(**data.get("agentic", {})),
+        structured=StructuredConfig(**data.get("structured", {})),
+        docai=DocaiConfig(**data.get("docai", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),

@@ -14,6 +14,7 @@ from typing import Annotated, Any, TypedDict
 from ai_prompter import Prompter
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Send
+from pydantic import BaseModel
 
 from ragcore.cache import SemanticCache
 from ragcore.observability.otel import set_gen_ai_attributes
@@ -130,7 +131,19 @@ async def _retrieve_answer(state: dict) -> dict:
     cfg = state.get("_config")
     vector_store = vector_store_for(cfg)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
-    chunks = await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
+    async def _search(term: str):
+        return await hybrid_search(state["_store"], state["_embedder_fn"], term, k=10, config=cfg, **extra)
+
+    if cfg is not None and getattr(cfg, "query_rewrite", None) is not None and cfg.query_rewrite.enabled:
+        from ragcore.query_rewrite import expand_and_fuse
+        chat_qr, p_qr, m_qr = _select_and_build(cfg, force_cloud=state.get("_force_cloud", False))
+        async def _chat_fn(prompt: str):
+            msg = await _traced_invoke(cfg, chat_qr, p_qr, m_qr, prompt, "query_rewrite")
+            return _clean(msg.content)
+        chunks = await expand_and_fuse(term, cfg, _chat_fn, _search, k=10)
+    else:
+        chunks = await _search(term)
+
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
@@ -200,6 +213,24 @@ def _record_usage(config, question: str, answer: str, *, cached: bool,
 
 
 async def _answer_question_inner(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    if config is not None and getattr(config, "agentic", None) is not None and config.agentic.enabled:
+        import ragcore.agentic as _ag
+        cfg = config
+
+        async def _search(term: str):
+            vs = vector_store_for(cfg)
+            extra = {"vector_store": vs} if vs is not None else {}
+            return await hybrid_search(store, embedder_fn, term, k=10, config=cfg, **extra)
+
+        async def _chat_fn(prompt: str):
+            chat, provider, model = _select_and_build(cfg, content=prompt, force_cloud=force_cloud)
+            msg = await _traced_invoke(cfg, chat, provider, model, prompt, "agentic")
+            return _clean(msg.content)
+
+        result = await _ag.run_agentic(question, cfg.agentic, _chat_fn, _search)
+        _record_usage(cfg, question, result["answer"], cached=False, force_cloud=force_cloud)
+        return {"answer": result["answer"], "citations": result["citations"]}
+
     # Budget enforcement: check BEFORE any LLM call.
     if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
         if config.cost.enforce:
@@ -251,3 +282,23 @@ async def answer_question(question: str, store, config, embedder_fn, force_cloud
         if root is not None:
             root.set_attribute("ragcore.question_chars", len(question))
         return await _answer_question_inner(question, store, config, embedder_fn, force_cloud)
+
+
+class StructuredAnswer(BaseModel):
+    answer: str
+    citations: list[str] = []
+    confidence: float = 0.0
+
+
+async def answer_structured(question: str, store, config, embedder_fn):
+    """Retrieve as usual, then synthesise a schema-validated answer object.
+
+    Structured backends (instructor/outlines) run against the local Ollama model
+    in ``config.structured.model``; there is no cloud-escalation path here, so this
+    intentionally takes no ``force_cloud`` (unlike ``answer_question``)."""
+    from ragcore.structured import generate_structured, _render as _srender
+    vector_store = vector_store_for(config)
+    extra = {"vector_store": vector_store} if vector_store is not None else {}
+    chunks = await hybrid_search(store, embedder_fn, question, k=10, config=config, **extra)
+    prompt = _srender("structured_answer", {"question": question, "chunks": chunks})
+    return await generate_structured(prompt, StructuredAnswer, config)
