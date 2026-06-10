@@ -229,11 +229,17 @@ def search(
 
 
 @app.command()
-def ask(question: str, cloud: bool = typer.Option(False, "--cloud", help="Force cloud escalation")):
+def ask(
+    question: str,
+    cloud: bool = typer.Option(False, "--cloud", help="Force cloud escalation"),
+    agentic: bool = typer.Option(False, "--agentic", help="Use the corrective agentic-RAG loop"),
+):
     """Ask a question over the ingested corpus."""
     try:
         from ragcore.ask import answer_question
         cfg, store = _load()
+        if agentic:
+            cfg.agentic.enabled = True
         result = asyncio.run(answer_question(question, store, cfg, _embedder(cfg), force_cloud=cloud))
         typer.echo(result["answer"])
         if result["citations"]:

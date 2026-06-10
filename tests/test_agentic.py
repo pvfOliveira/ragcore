@@ -1,5 +1,6 @@
 from ragcore.config import AgenticConfig
 from ragcore.agentic import grade_documents
+from ragcore.ask import answer_question
 
 
 async def test_grade_documents_keeps_relevant_only():
@@ -30,3 +31,20 @@ async def test_loop_reretrieves_once_then_stops():
     # initial retrieve + up to max_iterations re-retrieves = 1 + 2 = 3 search calls max
     assert 1 <= len(searches) <= 3
     assert "answer" in out and "grounded" in out
+
+
+async def test_answer_question_routes_to_agentic(monkeypatch):
+    import ragcore.ask as ask
+    called = {}
+    async def fake_run_agentic(question, cfg, chat_fn, search_fn, answer_fn=None):
+        called["hit"] = True
+        return {"answer": "A", "citations": ["s"], "grounded": True, "iterations": 0}
+    monkeypatch.setattr("ragcore.agentic.run_agentic", fake_run_agentic)
+
+    class Cfg:
+        agentic = AgenticConfig(enabled=True)
+        cost = None
+        cache = None
+    out = await ask.answer_question("q", store=object(), config=Cfg(),
+                                    embedder_fn=lambda x: [0.0])
+    assert called.get("hit") and out["answer"] == "A"

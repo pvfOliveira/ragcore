@@ -212,6 +212,24 @@ def _record_usage(config, question: str, answer: str, *, cached: bool,
 
 
 async def _answer_question_inner(question: str, store, config, embedder_fn, force_cloud: bool = False) -> dict:
+    if config is not None and getattr(config, "agentic", None) is not None and config.agentic.enabled:
+        import ragcore.agentic as _ag
+        cfg = config
+
+        async def _search(term: str):
+            vs = vector_store_for(cfg)
+            extra = {"vector_store": vs} if vs is not None else {}
+            return await hybrid_search(store, embedder_fn, term, k=10, config=cfg, **extra)
+
+        async def _chat_fn(prompt: str):
+            chat, provider, model = _select_and_build(cfg, content=prompt, force_cloud=force_cloud)
+            msg = await _traced_invoke(cfg, chat, provider, model, prompt, "agentic")
+            return _clean(msg.content)
+
+        result = await _ag.run_agentic(question, cfg.agentic, _chat_fn, _search)
+        _record_usage(cfg, question, result["answer"], cached=False, force_cloud=force_cloud)
+        return {"answer": result["answer"], "citations": result["citations"]}
+
     # Budget enforcement: check BEFORE any LLM call.
     if config is not None and getattr(config, "cost", None) is not None and config.cost.enabled:
         if config.cost.enforce:
