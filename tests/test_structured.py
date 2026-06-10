@@ -27,3 +27,17 @@ async def test_disabled_raises():
     cfg = _Cfg(enabled=False)
     with pytest.raises(Exception):
         await generate_structured("q", Answer, cfg)
+
+
+async def test_outlines_backend_returns_validated_model(monkeypatch):
+    cfg = _Cfg(enabled=True, backend="outlines")
+    monkeypatch.setattr("ragcore.structured._outlines_generate",
+                        lambda config, prompt, schema: schema(answer="ok", confidence=0.5))
+    out = await generate_structured("q", Answer, cfg)
+    assert isinstance(out, Answer) and out.answer == "ok"
+
+
+async def test_unknown_backend_raises():
+    cfg = _Cfg(enabled=True, backend="bogus")
+    with pytest.raises(ValueError):
+        await generate_structured("q", Answer, cfg)

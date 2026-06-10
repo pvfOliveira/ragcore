@@ -34,6 +34,25 @@ def _instructor_create(client, model: str, prompt: str, schema: Type[BaseModel])
     )
 
 
+# Wave-3 risk note: if outlines proves brittle on this Ollama host at the live
+# step (Task 9), fall back to instructor-only and skip `outlines`
+# and say so in docs — honesty first.  _outlines_generate is a single seam
+# that the deterministic test monkeypatches; the real proof is Task 9's live test.
+def _outlines_generate(config, prompt: str, schema: Type[BaseModel]) -> BaseModel:
+    import json
+    import ollama                              # lazy
+    import outlines                            # lazy — optional extra
+
+    cfg = config.structured
+    model = outlines.from_ollama(ollama.Client(), cfg.model)
+    result = model(prompt, schema)             # JSON-schema-constrained via Ollama
+    if isinstance(result, schema):
+        return result
+    if isinstance(result, dict):
+        return schema(**result)
+    return schema(**json.loads(result))
+
+
 async def generate_structured(prompt: str, schema: Type[BaseModel], config) -> BaseModel:
     cfg = config.structured
     if not cfg.enabled:
@@ -41,4 +60,6 @@ async def generate_structured(prompt: str, schema: Type[BaseModel], config) -> B
     if cfg.backend == "instructor":
         client, model = _instructor_client(config)
         return _instructor_create(client, model, prompt, schema)
+    if cfg.backend == "outlines":
+        return _outlines_generate(config, prompt, schema)
     raise ValueError(f"Unknown structured backend {cfg.backend!r}")
