@@ -31,11 +31,12 @@ retry_base_seconds = 2
 history_window = 10
 
 [store]
-vector_backend = "surreal"   # surreal | chroma | faiss | milvus
+vector_backend = "surreal"   # surreal | chroma | faiss | milvus | qdrant (v3)
 # Persistence locations for the pluggable backends (only the selected one is used):
 chroma_path = "data/chroma"
 faiss_path = "data/faiss"
 milvus_uri = "data/milvus.db"
+qdrant_path = "data/qdrant"  # in-process Qdrant (no server required; uv pip install -e '.[qdrant]')
 collection = "ragcore"
 
 [rerank]
@@ -78,6 +79,8 @@ hops = 1                  # traversal depth
 model = "ViT-B-32"        # open_clip model name (requires ragcore[multimodal])
 pretrained = "laion2b_s34b_b79k"
 device = "mps"            # mps | cuda | cpu
+vlm_enabled = false       # v3: modest VLM image captioning (uv pip install -e '.[docai,structured]')
+vlm_model = "moondream"   # small Ollama vision model
 
 [observability]
 enabled = false                 # OTel-GenAI tracing of the ask pipeline
@@ -96,3 +99,25 @@ enabled = false                 # route LLM calls through a LiteLLM gateway
 enabled = false                 # load a DSPy-compiled strategy prompt when present
 compiled_path = "data/dspy_compiled.json"
 max_demos = 4
+
+# ---------------------------------------------------------------------------
+# RAG v3 — all capabilities default OFF; enable individually
+# ---------------------------------------------------------------------------
+
+[query_rewrite]
+enabled = false
+strategy = "multi_query"   # multi_query | hyde | decompose
+n = 3
+
+[agentic]
+enabled = false
+max_iterations = 2
+min_relevant = 2
+
+[structured]
+enabled = false
+backend = "instructor"     # instructor | outlines
+
+[docai]
+enabled = false
+parser = "docling"         # docling | pymupdf

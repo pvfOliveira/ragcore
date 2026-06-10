@@ -310,6 +310,103 @@ by reading the file.
 | multimodal-ai | `ragcore/multimodal.py:58` (`ClipEmbedder`), `ragcore/multimodal.py:33` (`cross_modal_rank`), `ragcore/multimodal.py:154` (`ImageStore`) | proven (deterministic + live) |
 | inference-optimization | `ragcore/bench/harness.py:30` (`run_bench`); `ragcore/bench/serving.py:39` (`vllm_serve` — CUDA-gated design stub) | MPS bench proven; GPU serving aspirational (holdout) |
 
+## RAG v3 (opt-in)
+
+Five advanced retrieval capabilities, all disabled by default. Enable each
+independently in `config.toml`; the default ingest/ask paths are unchanged.
+
+### Query rewriting
+
+Rewrites the user query before retrieval using one of three strategies:
+`multi_query` (generate N paraphrases and union the results), `hyde`
+(hallucinate a hypothetical answer and embed it), or `decompose` (split a
+compound question into sub-queries and merge results).
+
+```toml
+[query_rewrite]
+enabled  = true
+strategy = "multi_query"   # multi_query | hyde | decompose
+n        = 3
+```
+
+### Agentic RAG
+
+Iterative retrieval loop: the LLM decides whether the retrieved context is
+sufficient or whether to re-query before producing a final answer. Useful for
+multi-hop questions.
+
+```bash
+ragcore ask --agentic "What are the trade-offs discussed across all documents?"
+```
+
+```toml
+[agentic]
+enabled        = true
+max_iterations = 2
+min_relevant   = 2
+```
+
+### Structured generation
+
+Forces the LLM to return a validated Pydantic schema via **Instructor** (JSON
+mode) or **Outlines** (constrained token sampling). Activated with the
+`--structured` flag:
+
+```bash
+ragcore ask --structured "Summarise the key findings"
+```
+
+```toml
+[structured]
+enabled = true
+backend = "instructor"   # instructor | outlines
+```
+
+```bash
+uv pip install -e '.[structured]'   # pulls instructor + outlines
+```
+
+### Qdrant vector backend
+
+In-process Qdrant (no server required) as an alternative to the default
+SurrealDB vector index. All existing backends (chroma, faiss, milvus) remain
+available.
+
+```toml
+[store]
+vector_backend = "qdrant"
+qdrant_path    = "data/qdrant"
+```
+
+```bash
+uv pip install -e '.[qdrant]'
+```
+
+> **Weaviate holdout:** Weaviate requires a running Docker daemon and is a
+> documented design holdout — the adapter interface is defined but not wired
+> to a live instance on this host.
+
+### Document AI / OCR + VLM captions
+
+`ragcore ingest` gains a richer extraction path: **Docling** (layout-aware PDF
+parsing) or **PyMuPDF** for OCR, plus a small Ollama vision model
+(moondream) to caption embedded images and inject them as searchable text.
+
+```toml
+[docai]
+enabled = true
+parser  = "docling"   # docling | pymupdf
+
+[multimodal]
+vlm_enabled = true
+vlm_model   = "moondream"
+```
+
+```bash
+uv pip install -e '.[docai,structured]'
+ollama pull moondream
+```
+
 ## Web UI
 
 A thin local chat UI (FastAPI + one HTML page, no build step):
