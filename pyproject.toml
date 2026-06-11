@@ -80,9 +80,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["ragcore*"]
 
-# Ship the promptfoo eval config (a non-.py data file) inside the built wheel/sdist.
+# Ship the promptfoo eval config and the golden eval datasets (non-.py data
+# files) inside the built wheel/sdist. golden/ is data inside ragcore.eval, not
+# a subpackage: an __init__.py there would shadow the ragcore/eval/golden.py
+# module, so the glob is keyed on the parent package.
 [tool.setuptools.package-data]
 "ragcore.eval.promptfoo" = ["*.yaml"]
+"ragcore.eval" = ["golden/*.jsonl", "golden/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

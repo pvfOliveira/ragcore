@@ -26,7 +26,10 @@ from typing import Any
 RAGAS_METRICS = ("faithfulness", "answer_relevancy", "context_precision")
 TRULENS_METRICS = ("groundedness", "context_relevance", "answer_relevance")
 
-_DEFAULT_DATASET = Path(__file__).parent / "dataset.jsonl"
+# Golden v1 (versioned, provenance-noted; see golden/MANIFEST.md). The pre-v4
+# dataset.jsonl stays on disk for run-history comparability but is no longer
+# the default; --dataset still overrides.
+_DEFAULT_DATASET = Path(__file__).parent / "golden" / "v1.jsonl"
 _REPORT_PATH = Path(__file__).parent.parent.parent / "data" / "eval" / "report.json"
 
 
