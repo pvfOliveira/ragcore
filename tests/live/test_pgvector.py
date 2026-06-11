@@ -1,4 +1,4 @@
-"""LIVE: real Postgres+pgvector round-trip and end-to-end ingest+ask.
+"""LIVE: real Postgres+pgvector add->search round-trip with real Ollama embeddings.
 
 Requires: local Ollama (live gate), local Postgres with the vector extension
 in ragcore_test (Task 1 host setup). Skips cleanly when Postgres is absent.
@@ -22,7 +22,7 @@ _DSN = postgres_dsn()
 
 
 @pytest.mark.skipif(_DSN is None, reason="local Postgres (ragcore_test) not reachable")
-def test_pgvector_round_trip_and_e2e_ask(surreal_url):
+def test_pgvector_round_trip(surreal_url):
     from ragcore.config import SurrealConfig, load_config
     from ragcore.embedding import generate_embedding
     from ragcore.vectorstores.pgvector_store import PgVectorStore
