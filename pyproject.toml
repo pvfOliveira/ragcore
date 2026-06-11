@@ -61,6 +61,7 @@ structured = ["instructor>=1.3", "outlines>=0.1", "openai>=1.40"]
 qdrant = ["qdrant-client>=1.10"]
 pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.3"]
 weaviate = ["weaviate-client>=4.16"]
+hybrid = ["ragcore[qdrant]", "fastembed>=0.3"]
 docai = ["docling>=2.0", "pymupdf4llm>=0.0.17"]
 rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured,docai]"]
 

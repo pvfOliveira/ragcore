@@ -92,7 +92,11 @@ def make_vector_store(config: typing.Any) -> VectorStore:
         )
 
         return QdrantStore(
-            path=config.store.qdrant_path, collection=config.store.collection
+            path=config.store.qdrant_path,
+            collection=config.store.collection,
+            hybrid=getattr(config.store, "qdrant_hybrid", False),
+            sparse_model=getattr(config.store, "qdrant_sparse_model",
+                                 "Qdrant/bm42-all-minilm-l6-v2-attentions"),
         )
 
     if backend == "pgvector":

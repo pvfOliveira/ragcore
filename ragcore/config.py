@@ -52,6 +52,8 @@ class StoreConfig(BaseModel):
     faiss_path: str = "data/faiss"
     milvus_uri: str = "data/milvus.db"
     qdrant_path: str = "data/qdrant"
+    qdrant_hybrid: bool = False       # named dense+sparse vectors + in-Qdrant fusion
+    qdrant_sparse_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
     pgvector_dsn: str = "postgresql://localhost/ragcore"
     weaviate_path: str = "data/weaviate"
     weaviate_version: str = "1.30.5"   # embedded server binary pin (Darwin-all.zip)
