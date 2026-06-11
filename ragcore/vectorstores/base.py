@@ -50,6 +50,7 @@ def make_vector_store(config: typing.Any) -> VectorStore:
     - ``"milvus"``    — ``ragcore.vectorstores.milvus_store`` (Task 5).
     - ``"qdrant"``    — ``ragcore.vectorstores.qdrant_store`` (Task 10).
     - ``"pgvector"``  — ``ragcore.vectorstores.pgvector_store``.
+    - ``"weaviate"``  — ``ragcore.vectorstores.weaviate_store``.
     - anything else   — raises ``ValueError``.
 
     The chroma/faiss/milvus branches are wired lazily; they will raise an
@@ -103,7 +104,19 @@ def make_vector_store(config: typing.Any) -> VectorStore:
             dsn=config.store.pgvector_dsn, collection=config.store.collection
         )
 
+    if backend == "weaviate":
+        from ragcore.vectorstores.weaviate_store import (
+            WeaviateStore,  # type: ignore[import]
+        )
+
+        return WeaviateStore(
+            path=config.store.weaviate_path,
+            collection=config.store.collection,
+            version=config.store.weaviate_version,
+        )
+
     raise ValueError(
         f"Unknown vector_backend {backend!r}. "
-        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus', 'qdrant', 'pgvector'."
+        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus', 'qdrant', "
+        "'pgvector', 'weaviate'."
     )

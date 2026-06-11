@@ -45,7 +45,7 @@ class ChatConfig(BaseModel):
 
 
 class StoreConfig(BaseModel):
-    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus | qdrant | pgvector
+    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus | qdrant | pgvector | weaviate
     # Persistence locations for the pluggable backends. Defaults live under the
     # repo `data/` dir; only the selected backend's location is used.
     chroma_path: str = "data/chroma"
@@ -53,6 +53,8 @@ class StoreConfig(BaseModel):
     milvus_uri: str = "data/milvus.db"
     qdrant_path: str = "data/qdrant"
     pgvector_dsn: str = "postgresql://localhost/ragcore"
+    weaviate_path: str = "data/weaviate"
+    weaviate_version: str = "1.30.5"   # embedded server binary pin (Darwin-all.zip)
     # pgvector table name reuses `collection` below.
     collection: str = "ragcore"
 
