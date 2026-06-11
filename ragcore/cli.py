@@ -79,6 +79,15 @@ def ingest(
             else:
                 typer.echo(f"Skipped {source} (already ingested as {image_id})")
             return
+        from ragcore.audio import is_audio_path
+        if is_audio_path(source):
+            from ragcore.audio import ingest_audio
+            result = asyncio.run(ingest_audio(source, store, cfg))
+            if result.created:
+                typer.echo(f"Ingested audio {source} as {result.source_id}")
+            else:
+                typer.echo(f"Skipped {source} (already ingested as {result.source_id})")
+            return
         if is_async:
             from ragcore.jobs import JobQueue
             res = asyncio.run(JobQueue(cfg.surreal).enqueue(source))

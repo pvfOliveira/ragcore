@@ -11,22 +11,29 @@ Aggregation is identical whether the per-record scores come from an injected
 stub judge (deterministic, offline tests) or from the real Ollama-backed judge
 (``judge is None``). The judge interface is a single method::
 
-    judge.score(metric: str, record: dict) -> float
+    judge.score(metric: str, record: dict) -> float | None
 
-where ``record`` is ``{question, answer, contexts, ground_truth}``. This keeps
+where ``record`` is ``{question, answer, contexts, ground_truth}`` and ``None``
+means "this record could not be scored" (skipped in aggregation). This keeps
 the heavy ragas/trulens engines lazily imported behind the real judge and lets
 ``compute_metrics`` exercise the report assembly without a live LLM.
 """
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 RAGAS_METRICS = ("faithfulness", "answer_relevancy", "context_precision")
 TRULENS_METRICS = ("groundedness", "context_relevance", "answer_relevance")
 
-_DEFAULT_DATASET = Path(__file__).parent / "dataset.jsonl"
+# Golden v1 (versioned, provenance-noted; see golden/MANIFEST.md). The pre-v4
+# dataset.jsonl stays on disk for run-history comparability but is no longer
+# the default; --dataset still overrides.
+_DEFAULT_DATASET = Path(__file__).parent / "golden" / "v1.jsonl"
 _REPORT_PATH = Path(__file__).parent.parent.parent / "data" / "eval" / "report.json"
 
 
@@ -35,10 +42,29 @@ def _mean(values: list[float]) -> float:
 
 
 def _aggregate(metrics: tuple[str, ...], records: list[dict], judge: Any) -> dict[str, float]:
-    """Mean of the judge's per-record score for each metric."""
+    """Mean of the judge's per-record score for each metric.
+
+    A judge may return ``None`` for a record it could not score (e.g. the local
+    TruLens judge's response was unparseable). Such records are skipped — the
+    mean is taken over the records that were actually judged — rather than
+    fabricating a 0.0. If *no* record could be scored for a metric, that's an
+    eval failure and we raise.
+    """
     out: dict[str, float] = {}
     for metric in metrics:
-        out[metric] = _mean([float(judge.score(metric, r)) for r in records])
+        vals = [judge.score(metric, r) for r in records]
+        scored = [float(v) for v in vals if v is not None]
+        skipped = len(vals) - len(scored)
+        if skipped:
+            logger.warning(
+                "%s: skipped %d/%d records with unscorable judge responses",
+                metric,
+                skipped,
+                len(vals),
+            )
+        if not scored:
+            raise RuntimeError(f"all {len(records)} judge calls unparseable for {metric}")
+        out[metric] = _mean(scored)
     return out
 
 
@@ -181,25 +207,45 @@ class _OllamaJudge:
         return float(self._ragas_metric(name).single_turn_score(sample))
 
     # --- trulens -----------------------------------------------------------
-    def _score_trulens(self, name: str, record: dict) -> float:
+    def _trulens_call(self, fn, *args) -> float | None:
+        """One TruLens feedback call; ParseError -> None (skipped, warned).
+
+        The local judge occasionally answers with prose containing no
+        parseable rating; trulens raises ParseError. Skipping that single
+        measurement (not fabricating a score) keeps a 60-call eval run alive
+        — the metric's mean is taken over the calls that did parse.
+        """
+        try:
+            score, _ = fn(*args)
+            return float(score)
+        except Exception as e:  # trulens ParseError lives in a private module
+            if type(e).__name__ != "ParseError":
+                raise
+            logger.warning(
+                "trulens judge response unparseable; skipping one measurement: %s", e
+            )
+            return None
+
+    def _score_trulens(self, name: str, record: dict) -> float | None:
         question = record["question"]
         answer = record["answer"]
         contexts = list(record["contexts"])
         context_text = "\n".join(contexts)
         p = self._trulens
         if name == "groundedness":
-            score, _ = p.groundedness_measure_with_cot_reasons(context_text, answer)
-        elif name == "context_relevance":
-            score = _mean(
-                [p.context_relevance_with_cot_reasons(question, c)[0] for c in contexts]
-            )
-        elif name == "answer_relevance":
-            score, _ = p.relevance_with_cot_reasons(question, answer)
-        else:  # pragma: no cover - guarded by metric tuples
-            raise KeyError(name)
-        return float(score)
+            return self._trulens_call(p.groundedness_measure_with_cot_reasons, context_text, answer)
+        if name == "context_relevance":
+            per_context = [
+                self._trulens_call(p.context_relevance_with_cot_reasons, question, c)
+                for c in contexts
+            ]
+            parsed = [s for s in per_context if s is not None]
+            return _mean(parsed) if parsed else None
+        if name == "answer_relevance":
+            return self._trulens_call(p.relevance_with_cot_reasons, question, answer)
+        raise KeyError(name)  # pragma: no cover - guarded by metric tuples
 
-    def score(self, metric: str, record: dict) -> float:
+    def score(self, metric: str, record: dict) -> float | None:
         if metric in RAGAS_METRICS:
             return self._score_ragas(metric, record)
         return self._score_trulens(metric, record)

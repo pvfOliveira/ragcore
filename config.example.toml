@@ -121,3 +121,31 @@ backend = "instructor"     # instructor | outlines
 [docai]
 enabled = false
 parser = "docling"         # docling | pymupdf
+
+# ---------------------------------------------------------------------------
+# RAG v4 — all capabilities default OFF; enable individually
+# ---------------------------------------------------------------------------
+
+# [store]
+# vector_backend = "pgvector"            # or "weaviate" | "qdrant" ...
+# pgvector_dsn = "postgresql://localhost/ragcore"
+# weaviate_path = "data/weaviate"
+# weaviate_version = "1.30.5"            # embedded server binary pin
+# qdrant_hybrid = false                  # named dense+sparse + in-Qdrant RRF
+# qdrant_sparse_model = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+
+# [compression]                          # LLMLingua-2 context compression (query-agnostic)
+# enabled = false
+# rate = 0.5                             # target token-keep ratio
+# model = "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
+# device = "cpu"                         # cpu | mps
+
+# [audio]                                # mlx-whisper audio ingest
+# enabled = false
+# model = "mlx-community/whisper-tiny"
+# timestamps = false                     # inline [mm:ss] markers in the transcript
+
+# [online_eval]                          # sampled scoring of live chat turns
+# enabled = false
+# sample_rate = 0.1
+# metrics = ["groundedness"]

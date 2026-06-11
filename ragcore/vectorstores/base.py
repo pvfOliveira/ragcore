@@ -44,12 +44,14 @@ def make_vector_store(config: typing.Any) -> VectorStore:
     """Construct and return a VectorStore for the backend named in *config*.
 
     Dispatches on ``config.store.vector_backend``:
-    - ``"surreal"``  — existing SurrealDB-backed ``Store`` (default).
-    - ``"chroma"``   — ``ragcore.vectorstores.chroma_store`` (Task 3).
-    - ``"faiss"``    — ``ragcore.vectorstores.faiss_store`` (Task 4).
-    - ``"milvus"``   — ``ragcore.vectorstores.milvus_store`` (Task 5).
-    - ``"qdrant"``   — ``ragcore.vectorstores.qdrant_store`` (Task 10).
-    - anything else  — raises ``ValueError``.
+    - ``"surreal"``   — existing SurrealDB-backed ``Store`` (default).
+    - ``"chroma"``    — ``ragcore.vectorstores.chroma_store`` (Task 3).
+    - ``"faiss"``     — ``ragcore.vectorstores.faiss_store`` (Task 4).
+    - ``"milvus"``    — ``ragcore.vectorstores.milvus_store`` (Task 5).
+    - ``"qdrant"``    — ``ragcore.vectorstores.qdrant_store`` (Task 10).
+    - ``"pgvector"``  — ``ragcore.vectorstores.pgvector_store``.
+    - ``"weaviate"``  — ``ragcore.vectorstores.weaviate_store``.
+    - anything else   — raises ``ValueError``.
 
     The chroma/faiss/milvus branches are wired lazily; they will raise an
     ``ImportError`` at call time until the adapter modules are added.
@@ -90,10 +92,35 @@ def make_vector_store(config: typing.Any) -> VectorStore:
         )
 
         return QdrantStore(
-            path=config.store.qdrant_path, collection=config.store.collection
+            path=config.store.qdrant_path,
+            collection=config.store.collection,
+            hybrid=getattr(config.store, "qdrant_hybrid", False),
+            sparse_model=getattr(config.store, "qdrant_sparse_model",
+                                 "Qdrant/bm42-all-minilm-l6-v2-attentions"),
+        )
+
+    if backend == "pgvector":
+        from ragcore.vectorstores.pgvector_store import (
+            PgVectorStore,  # type: ignore[import]
+        )
+
+        return PgVectorStore(
+            dsn=config.store.pgvector_dsn, collection=config.store.collection
+        )
+
+    if backend == "weaviate":
+        from ragcore.vectorstores.weaviate_store import (
+            WeaviateStore,  # type: ignore[import]
+        )
+
+        return WeaviateStore(
+            path=config.store.weaviate_path,
+            collection=config.store.collection,
+            version=config.store.weaviate_version,
         )
 
     raise ValueError(
         f"Unknown vector_backend {backend!r}. "
-        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus', 'qdrant'."
+        "Valid options: 'surreal', 'chroma', 'faiss', 'milvus', 'qdrant', "
+        "'pgvector', 'weaviate'."
     )

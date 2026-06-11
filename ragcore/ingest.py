@@ -33,22 +33,27 @@ async def _extract(path_or_url: str) -> dict:
 
 
 async def ingest_source(
-    path_or_url: str, store, config, chunk_size: int = 400
+    path_or_url: str, store, config, chunk_size: int = 400,
+    content: str | None = None, title: str | None = None,
 ) -> IngestResult:
     existing = await store.find_source_id_by_origin(path_or_url)
     if existing:
         return IngestResult(source_id=existing, created=False)
-    extracted = await _extract(path_or_url)
-    from ragcore.docai import extract_if_document
-    _doc_md = extract_if_document(path_or_url, config)
-    if _doc_md is not None:
-        content = _doc_md
+    if content is None:
+        extracted = await _extract(path_or_url)
+        from ragcore.docai import extract_if_document
+        _doc_md = extract_if_document(path_or_url, config)
+        if _doc_md is not None:
+            content = _doc_md
+        else:
+            content = extracted["content"]
+        title = title or extracted["title"]
     else:
-        content = extracted["content"]
+        title = title or path_or_url
     if not content.strip():
         raise ValueError(f"No content extracted from {path_or_url}")
     source_id = await store.create_source(
-        title=extracted["title"], full_text=content, origin=extracted["origin"],
+        title=title, full_text=content, origin=path_or_url,
     )
     chunks = chunk_text(content, chunk_size=chunk_size, file_path=path_or_url)
     if not chunks:

@@ -78,7 +78,10 @@ async def hybrid_search(store, embedder_fn, query: str, k: int = 10, vector_stor
     """
     query_vec = await embedder_fn(query)
     if vector_store is not None:
-        hits = await vector_store.vector_search(query_vec, k=k)
+        if getattr(vector_store, "supports_hybrid", False):
+            hits = await vector_store.hybrid_search(query, query_vec, k=k)
+        else:
+            hits = await vector_store.vector_search(query_vec, k=k)
         vres = [_adapter_hit_to_ragcore(h) for h in hits]
     else:
         vres = await store.vector_search(query_vec, k=k)

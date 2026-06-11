@@ -146,6 +146,9 @@ async def _retrieve_answer(state: dict) -> dict:
 
     if cfg is not None and cfg.rerank.enabled:
         chunks = rerank(term, chunks, top_k=cfg.rerank.top_k, model=cfg.rerank.model)
+    if cfg is not None and cfg.compression.enabled:
+        from ragcore.compress import compress_context
+        chunks, _comp_stats = compress_context(chunks, term, cfg)
     prompt = _render("ask_answer", {"term": term, "chunks": chunks})
     chat, provider, model = _select_and_build(cfg, force_cloud=state.get("_force_cloud", False))
     msg = await _traced_invoke(cfg, chat, provider, model, prompt, "retrieve_answer")
@@ -296,7 +299,8 @@ async def answer_structured(question: str, store, config, embedder_fn):
     Structured backends (instructor/outlines) run against the local Ollama model
     in ``config.structured.model``; there is no cloud-escalation path here, so this
     intentionally takes no ``force_cloud`` (unlike ``answer_question``)."""
-    from ragcore.structured import generate_structured, _render as _srender
+    from ragcore.structured import _render as _srender
+    from ragcore.structured import generate_structured
     vector_store = vector_store_for(config)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
     chunks = await hybrid_search(store, embedder_fn, question, k=10, config=config, **extra)

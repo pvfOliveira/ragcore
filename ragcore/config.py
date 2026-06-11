@@ -5,7 +5,7 @@ import tomllib
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ragcore.errors import ConfigurationError
 
@@ -45,13 +45,19 @@ class ChatConfig(BaseModel):
 
 
 class StoreConfig(BaseModel):
-    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus | qdrant
+    vector_backend: str = "surreal"  # surreal | chroma | faiss | milvus | qdrant | pgvector | weaviate
     # Persistence locations for the pluggable backends. Defaults live under the
     # repo `data/` dir; only the selected backend's location is used.
     chroma_path: str = "data/chroma"
     faiss_path: str = "data/faiss"
     milvus_uri: str = "data/milvus.db"
     qdrant_path: str = "data/qdrant"
+    qdrant_hybrid: bool = False       # named dense+sparse vectors + in-Qdrant fusion
+    qdrant_sparse_model: str = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+    pgvector_dsn: str = "postgresql://localhost/ragcore"
+    weaviate_path: str = "data/weaviate"
+    weaviate_version: str = "1.30.5"   # embedded server binary pin (Darwin-all.zip)
+    # pgvector table name reuses `collection` below.
     collection: str = "ragcore"
 
 
@@ -152,6 +158,25 @@ class DocaiConfig(BaseModel):
     parser: str = "docling"        # docling | pymupdf (fallback)
 
 
+class CompressionConfig(BaseModel):
+    enabled: bool = False
+    rate: float = 0.5                # target token-keep ratio
+    model: str = "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
+    device: str = "cpu"              # llmlingua-2 encoder device (cpu | mps)
+
+
+class AudioConfig(BaseModel):
+    enabled: bool = False
+    model: str = "mlx-community/whisper-tiny"
+    timestamps: bool = False         # inline [mm:ss] markers in the transcript
+
+
+class OnlineEvalConfig(BaseModel):
+    enabled: bool = False
+    sample_rate: float = Field(0.1, ge=0.0, le=1.0)
+    metrics: list[str] = ["groundedness"]
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -163,10 +188,13 @@ class Config(BaseModel):
     agentic: AgenticConfig = AgenticConfig()
     structured: "StructuredConfig" = StructuredConfig()
     docai: "DocaiConfig" = DocaiConfig()
+    compression: CompressionConfig = CompressionConfig()
+    audio: AudioConfig = AudioConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
     eval: EvalConfig = EvalConfig()
+    online_eval: OnlineEvalConfig = OnlineEvalConfig()
     llmops: LlmopsConfig = LlmopsConfig()
     cost: CostConfig = CostConfig()
     bench: BenchConfig = BenchConfig()
@@ -198,10 +226,13 @@ def load_config(path: str | Path = "config.toml") -> Config:
         agentic=AgenticConfig(**data.get("agentic", {})),
         structured=StructuredConfig(**data.get("structured", {})),
         docai=DocaiConfig(**data.get("docai", {})),
+        compression=CompressionConfig(**data.get("compression", {})),
+        audio=AudioConfig(**data.get("audio", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
         eval=EvalConfig(**data.get("eval", {})),
+        online_eval=OnlineEvalConfig(**data.get("online_eval", {})),
         llmops=LlmopsConfig(**data.get("llmops", {})),
         cost=CostConfig(**data.get("cost", {})),
         bench=BenchConfig(**data.get("bench", {})),

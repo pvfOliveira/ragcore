@@ -59,8 +59,13 @@ gateway = ["litellm>=1.40"]
 dspy = ["dspy>=2.5"]
 structured = ["instructor>=1.3", "outlines>=0.1", "openai>=1.40"]
 qdrant = ["qdrant-client>=1.10"]
+pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.3"]
+weaviate = ["weaviate-client>=4.16"]
+hybrid = ["ragcore[qdrant]", "fastembed>=0.3"]
+compress = ["llmlingua>=0.2,<0.3"]  # 0.2.2 verified; internal API unstable across minors
+audio = ["mlx-whisper>=0.4"]
 docai = ["docling>=2.0", "pymupdf4llm>=0.0.17"]
-rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured,docai]"]
+rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured,docai,pgvector,weaviate,hybrid,compress,audio]"]
 
 [project.scripts]
 ragcore = "ragcore.cli:app"
@@ -75,9 +80,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["ragcore*"]
 
-# Ship the promptfoo eval config (a non-.py data file) inside the built wheel/sdist.
+# Ship the promptfoo eval config and the golden eval datasets (non-.py data
+# files) inside the built wheel/sdist. golden/ is data inside ragcore.eval, not
+# a subpackage: an __init__.py there would shadow the ragcore/eval/golden.py
+# module, so the glob is keyed on the parent package.
 [tool.setuptools.package-data]
 "ragcore.eval.promptfoo" = ["*.yaml"]
+"ragcore.eval" = ["golden/*.jsonl", "golden/*.md"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

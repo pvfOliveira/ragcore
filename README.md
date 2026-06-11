@@ -382,9 +382,9 @@ qdrant_path    = "data/qdrant"
 uv pip install -e '.[qdrant]'
 ```
 
-> **Weaviate holdout:** Weaviate requires a running Docker daemon and is a
-> documented design holdout — the adapter interface is defined but not wired
-> to a live instance on this host.
+> **Weaviate holdout:** ~~Weaviate requires a running Docker daemon and is a
+> documented design holdout~~ — superseded in RAG v4: Weaviate Embedded runs
+> as a local binary, no Docker (see below).
 
 ### Document AI / OCR + VLM captions
 
@@ -406,6 +406,123 @@ vlm_model   = "moondream"
 uv pip install -e '.[docai,structured]'
 ollama pull moondream
 ```
+
+## RAG v4 (opt-in)
+
+Six further capabilities, all config-gated and disabled by default — the
+stock ingest/ask paths are byte-identical until you flip a switch.
+
+### pgvector backend
+
+PostgreSQL with the pgvector extension as a vector backend, via a thin
+psycopg adapter. Three-line host setup:
+
+```bash
+brew install pgvector postgresql@17
+brew services start postgresql@17
+createdb ragcore && psql ragcore -c "CREATE EXTENSION vector"
+```
+
+```toml
+[store]
+vector_backend = "pgvector"
+pgvector_dsn   = "postgresql://localhost/ragcore"
+```
+
+```bash
+uv pip install -e '.[pgvector]'
+```
+
+### Weaviate Embedded backend
+
+Supersedes the v3 holdout: the "needs Docker" claim was outdated — Weaviate
+Embedded ships a Darwin binary that the client downloads and runs in-process,
+no Docker daemon involved.
+
+```toml
+[store]
+vector_backend   = "weaviate"
+weaviate_path    = "data/weaviate"
+weaviate_version = "1.30.5"   # embedded server binary pin
+```
+
+```bash
+uv pip install -e '.[weaviate]'
+```
+
+### Hybrid sparse+dense retrieval (Qdrant)
+
+BM42 learned-sparse vectors (via fastembed) stored alongside dense vectors as
+named vectors in one Qdrant collection, fused server-side with RRF inside
+Qdrant. Distinct from the default SurrealDB path, which fuses BM25 and dense
+results client-side.
+
+```toml
+[store]
+vector_backend     = "qdrant"
+qdrant_hybrid      = true
+qdrant_sparse_model = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+```
+
+```bash
+uv pip install -e '.[hybrid]'
+```
+
+### Context compression (LLMLingua-2)
+
+Compresses retrieved chunks before they enter the prompt using the
+LLMLingua-2 token-classification encoder (local, CPU/MPS, query-agnostic).
+One implementation, two honest claims: RAG-side context compression and
+cost-side prompt compression — the measured keep ratio (0.526 live at
+`rate = 0.5`) is the cost evidence.
+
+```toml
+[compression]
+enabled = true
+rate    = 0.5   # target token-keep ratio
+device  = "cpu" # cpu | mps
+```
+
+```bash
+uv pip install -e '.[compress]'
+```
+
+### Audio ingest (mlx-whisper)
+
+`ragcore ingest meeting.m4a` transcribes audio with mlx-whisper (Whisper on
+Apple-Silicon Metal via MLX) and feeds the transcript through the normal text
+pipeline — chunked, embedded, hybrid-searchable, citable. Optional inline
+`[mm:ss]` timestamp markers survive as searchable text.
+
+```toml
+[audio]
+enabled    = true
+model      = "mlx-community/whisper-tiny"
+timestamps = false
+```
+
+```bash
+uv pip install -e '.[audio]'
+```
+
+### Golden eval datasets + online eval
+
+`ragcore eval`/`gate` now consume a versioned, provenance-noted golden
+dataset (`ragcore/eval/golden/v1.jsonl`, 10 items; `MANIFEST.md` records the
+corpus, sources and the failure mode each item probes). Online eval samples
+live chat turns — "prod" here is the local chat path — and scores them
+(groundedness by default), landing the scores on an `online_eval` OTel span
+exported to Phoenix.
+
+```toml
+[online_eval]
+enabled     = true
+sample_rate = 0.1
+metrics     = ["groundedness"]
+```
+
+The `rag-upgrade` meta-extra now pulls all five new extras
+(`pgvector,weaviate,hybrid,compress,audio`) alongside the v2/v3 set.
 
 ## Web UI
 

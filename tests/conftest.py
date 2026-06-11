@@ -25,6 +25,20 @@ def _ollama_up(base: str = "http://localhost:11434") -> bool:
         return False
 
 
+def postgres_dsn() -> str | None:
+    """DSN of a reachable local test Postgres, or None (live pg tests skip).
+
+    Uses the dedicated ragcore_test database created by host setup (Task 1).
+    """
+    dsn = "postgresql://localhost/ragcore_test"
+    try:
+        import psycopg
+        with psycopg.connect(dsn, connect_timeout=1):
+            return dsn
+    except Exception:
+        return None
+
+
 def pytest_collection_modifyitems(config, items):
     """Skip @pytest.mark.live items unless a local Ollama is reachable."""
     if _ollama_up():
