@@ -165,6 +165,12 @@ class CompressionConfig(BaseModel):
     device: str = "cpu"              # llmlingua-2 encoder device (cpu | mps)
 
 
+class AudioConfig(BaseModel):
+    enabled: bool = False
+    model: str = "mlx-community/whisper-tiny"
+    timestamps: bool = False         # inline [mm:ss] markers in the transcript
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -177,6 +183,7 @@ class Config(BaseModel):
     structured: "StructuredConfig" = StructuredConfig()
     docai: "DocaiConfig" = DocaiConfig()
     compression: CompressionConfig = CompressionConfig()
+    audio: AudioConfig = AudioConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -213,6 +220,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         structured=StructuredConfig(**data.get("structured", {})),
         docai=DocaiConfig(**data.get("docai", {})),
         compression=CompressionConfig(**data.get("compression", {})),
+        audio=AudioConfig(**data.get("audio", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),

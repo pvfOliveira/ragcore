@@ -63,6 +63,7 @@ pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.3"]
 weaviate = ["weaviate-client>=4.16"]
 hybrid = ["ragcore[qdrant]", "fastembed>=0.3"]
 compress = ["llmlingua>=0.2,<0.3"]  # 0.2.2 verified; internal API unstable across minors
+audio = ["mlx-whisper>=0.4"]
 docai = ["docling>=2.0", "pymupdf4llm>=0.0.17"]
 rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured,docai]"]
 
