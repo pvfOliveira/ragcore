@@ -5,7 +5,7 @@ import tomllib
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ragcore.errors import ConfigurationError
 
@@ -171,6 +171,12 @@ class AudioConfig(BaseModel):
     timestamps: bool = False         # inline [mm:ss] markers in the transcript
 
 
+class OnlineEvalConfig(BaseModel):
+    enabled: bool = False
+    sample_rate: float = Field(0.1, ge=0.0, le=1.0)
+    metrics: list[str] = ["groundedness"]
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -188,6 +194,7 @@ class Config(BaseModel):
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
     eval: EvalConfig = EvalConfig()
+    online_eval: OnlineEvalConfig = OnlineEvalConfig()
     llmops: LlmopsConfig = LlmopsConfig()
     cost: CostConfig = CostConfig()
     bench: BenchConfig = BenchConfig()
@@ -225,6 +232,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
         eval=EvalConfig(**data.get("eval", {})),
+        online_eval=OnlineEvalConfig(**data.get("online_eval", {})),
         llmops=LlmopsConfig(**data.get("llmops", {})),
         cost=CostConfig(**data.get("cost", {})),
         bench=BenchConfig(**data.get("bench", {})),

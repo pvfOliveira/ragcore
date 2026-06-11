@@ -37,6 +37,13 @@ async def chat_turn(session_store, store, config, session_id, message, embedder_
     answer = _clean(amsg.content)
     citations = sorted({c["source"] for c in chunks})
 
+    # Awaited (not create_task): the CLI runs asyncio.run per turn — a detached
+    # task would be cancelled at loop teardown. Sampled turns pay the judge
+    # latency; that's the documented trade-off of online scoring.
+    if getattr(config, "online_eval", None) is not None and config.online_eval.enabled:
+        from ragcore.eval import online
+        await online.maybe_score_turn(message, answer, chunks, config)
+
     await session_store.add_message(session_id, "user", message)
     await session_store.add_message(session_id, "assistant", answer, citations)
     return {"answer": answer, "citations": citations}
