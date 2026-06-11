@@ -28,6 +28,9 @@ async def chat_turn(session_store, store, config, session_id, message, embedder_
     vector_store = vector_store_for(config)
     extra = {"vector_store": vector_store} if vector_store is not None else {}
     chunks = await hybrid_search(store, embedder_fn, query, k=10, config=config, **extra)
+    if config.compression.enabled:
+        from ragcore.compress import compress_context
+        chunks, _comp_stats = compress_context(chunks, query, config)
     chat = _build_chat(config, content=message)
     amsg = await chat.ainvoke(_render("chat_answer",
                                       {"history": history, "chunks": chunks, "message": message}))

@@ -158,6 +158,13 @@ class DocaiConfig(BaseModel):
     parser: str = "docling"        # docling | pymupdf (fallback)
 
 
+class CompressionConfig(BaseModel):
+    enabled: bool = False
+    rate: float = 0.5                # target token-keep ratio
+    model: str = "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank"
+    device: str = "cpu"              # llmlingua-2 encoder device (cpu | mps)
+
+
 class Config(BaseModel):
     models: dict[str, ModelRole]
     routing: RoutingConfig = RoutingConfig()
@@ -169,6 +176,7 @@ class Config(BaseModel):
     agentic: AgenticConfig = AgenticConfig()
     structured: "StructuredConfig" = StructuredConfig()
     docai: "DocaiConfig" = DocaiConfig()
+    compression: CompressionConfig = CompressionConfig()
     store: StoreConfig = StoreConfig()
     rerank: RerankConfig = RerankConfig()
     cache: CacheConfig = CacheConfig()
@@ -204,6 +212,7 @@ def load_config(path: str | Path = "config.toml") -> Config:
         agentic=AgenticConfig(**data.get("agentic", {})),
         structured=StructuredConfig(**data.get("structured", {})),
         docai=DocaiConfig(**data.get("docai", {})),
+        compression=CompressionConfig(**data.get("compression", {})),
         store=StoreConfig(**data.get("store", {})),
         rerank=RerankConfig(**data.get("rerank", {})),
         cache=CacheConfig(**data.get("cache", {})),
