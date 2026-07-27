@@ -30,8 +30,8 @@ runnable MPS benchmark that sweeps Ollama serving params (num_ctx, num_batch,
 concurrency, keep_alive) and measures latency and throughput against a local
 Ollama server. Use that on this host.
 
-The skill node for production GPU serving is not claimed on this host
-and is NOT claimed as proven/experienced on this machine.
+Production GPU serving is NOT claimed here — this module is design-only on a
+CUDA-less host; only the MPS/CPU bench above reports measured numbers.
 """
 from __future__ import annotations
 

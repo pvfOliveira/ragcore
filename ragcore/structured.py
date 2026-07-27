@@ -35,8 +35,8 @@ def _instructor_create(client, model: str, prompt: str, schema: Type[BaseModel])
 
 
 # Wave-3 risk note: if outlines proves brittle on this Ollama host at the live
-# step (Task 9), fall back to instructor-only and skip `outlines`
-# and say so in docs — honesty first.  _outlines_generate is a single seam
+# step (Task 9), fall back to instructor-only and say so in the docs —
+# honesty over feature count.  _outlines_generate is a single seam
 # that the deterministic test monkeypatches; the real proof is Task 9's live test.
 def _outlines_generate(config, prompt: str, schema: Type[BaseModel]) -> BaseModel:
     import json
