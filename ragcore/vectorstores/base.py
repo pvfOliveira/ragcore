@@ -45,10 +45,10 @@ def make_vector_store(config: typing.Any) -> VectorStore:
 
     Dispatches on ``config.store.vector_backend``:
     - ``"surreal"``   — existing SurrealDB-backed ``Store`` (default).
-    - ``"chroma"``    — ``ragcore.vectorstores.chroma_store`` (Task 3).
-    - ``"faiss"``     — ``ragcore.vectorstores.faiss_store`` (Task 4).
-    - ``"milvus"``    — ``ragcore.vectorstores.milvus_store`` (Task 5).
-    - ``"qdrant"``    — ``ragcore.vectorstores.qdrant_store`` (Task 10).
+    - ``"chroma"``    — ``ragcore.vectorstores.chroma_store``.
+    - ``"faiss"``     — ``ragcore.vectorstores.faiss_store``.
+    - ``"milvus"``    — ``ragcore.vectorstores.milvus_store``.
+    - ``"qdrant"``    — ``ragcore.vectorstores.qdrant_store``.
     - ``"pgvector"``  — ``ragcore.vectorstores.pgvector_store``.
     - ``"weaviate"``  — ``ragcore.vectorstores.weaviate_store``.
     - anything else   — raises ``ValueError``.

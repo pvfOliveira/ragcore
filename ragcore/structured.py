@@ -18,7 +18,7 @@ def _render(template: str, data: dict) -> str:
 
 
 def _instructor_client(config):
-    import instructor                       # lazy — optional extra
+    import instructor  # lazy — optional extra
     from openai import OpenAI
 
     cfg = config.structured
@@ -34,14 +34,15 @@ def _instructor_create(client, model: str, prompt: str, schema: Type[BaseModel])
     )
 
 
-# Wave-3 risk note: if outlines proves brittle on this Ollama host at the live
-# step (Task 9), fall back to instructor-only and say so in the docs —
+# Risk note: if outlines proves brittle on this Ollama host at the live
+# step, fall back to instructor-only and say so in the docs —
 # honesty over feature count.  _outlines_generate is a single seam
-# that the deterministic test monkeypatches; the real proof is Task 9's live test.
+# that the deterministic test monkeypatches; the real proof is the live test.
 def _outlines_generate(config, prompt: str, schema: Type[BaseModel]) -> BaseModel:
     import json
-    import ollama                              # lazy
-    import outlines                            # lazy — optional extra
+
+    import ollama  # lazy
+    import outlines  # lazy — optional extra
 
     cfg = config.structured
     model = outlines.from_ollama(ollama.Client(), cfg.model)

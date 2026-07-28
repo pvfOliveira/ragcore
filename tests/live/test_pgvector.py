@@ -1,7 +1,7 @@
 """LIVE: real Postgres+pgvector add->search round-trip with real Ollama embeddings.
 
 Requires: local Ollama (live gate), local Postgres with the vector extension
-in ragcore_test (Task 1 host setup). Skips cleanly when Postgres is absent.
+in ragcore_test (host setup). Skips cleanly when Postgres is absent.
 Records a RunRegistry run tagged pgvector-v4 (the test_qdrant.py precedent).
 """
 from __future__ import annotations

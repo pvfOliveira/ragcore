@@ -142,7 +142,7 @@ class _OllamaJudge:
     Ragas metrics run through a ``LangchainLLMWrapper`` over ``ChatLiteLLM``;
     TruLens RAG-triad feedback runs through the ``LiteLLM`` provider. Both point
     at ``ollama/<model>``. Heavy imports happen in ``__init__`` so they stay out
-    of the offline (stubbed) path. Validated live in Task 10.
+    of the offline (stubbed) path. Validated against a live local Ollama.
     """
 
     def __init__(self, config: Any):
@@ -274,7 +274,7 @@ async def _contexts_for(question: str, store, config, embedder_fn) -> list[str]:
 def run_eval(config: Any, dataset_path: str | Path | None = None) -> dict:
     """Live evaluation: answer each dataset question with ragcore, retrieve its
     contexts, compute Ragas + TruLens metrics with the local Ollama judge, write
-    ``data/eval/report.json`` and print a small table. Exercised in Task 10."""
+    ``data/eval/report.json`` and print a small table. Exercised by the live tier."""
     import asyncio
 
     from ragcore.ask import answer_question

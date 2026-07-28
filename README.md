@@ -1,7 +1,13 @@
 # ragcore
 
+[![ci](https://github.com/pvfOliveira/ragcore/actions/workflows/ci.yml/badge.svg)](https://github.com/pvfOliveira/ragcore/actions/workflows/ci.yml)
+
 Local-first RAG core. Ingest documents/URLs, ask questions answered by a local
 LLM over hybrid (vector + full-text) retrieval, with cloud escalation when needed.
+
+> **Start here for the design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — a
+> full walkthrough of the architecture, the retrieval pipeline, every opt-in
+> layer, and the trade-offs behind them, with `file:line` citations into the code.
 
 ## Setup
 
@@ -160,7 +166,7 @@ against a local Ollama (qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by th
 | Ragas | `ragcore/eval/harness.py:161` (`_score_ragas`) | Live (qwen2.5:7b-instruct) — faithfulness=1.0, answer_relevancy≈0.85, context_precision≈0.50 on a grounded record |
 | TruLens | `ragcore/eval/harness.py:173` (`_score_trulens`); litellm shim `ragcore/eval/harness.py:62` | Live (qwen2.5:7b-instruct) — groundedness=1.0, context_relevance=0.5, answer_relevance=1.0 on a grounded record |
 
-> Live-eval notes (Task 10): first real exercise of the `judge=None` path
+> Live-eval notes: first real exercise of the `judge=None` path
 > surfaced three fixable mismatches, all fixed in `ragcore/eval/harness.py`:
 > (1) trulens-vs-litellm instrumentation crash on `litellm.CallTypes`
 > (`_patch_trulens_litellm_instrumentation`); (2) Ollama rejecting ragas'
@@ -290,9 +296,10 @@ device     = "mps"   # mps | cuda | cpu
 
 ### Test tiers (platform)
 
-- **Deterministic** (`pytest tests`): 162 tests — stubs all LLM calls and
+- **Deterministic** (`pytest tests`): 256 tests — stubs all LLM calls and
   SurrealDB interactions; no Ollama required. SurrealDB-backed tests
-  auto-skip if the `surreal` binary is absent.
+  auto-skip if the `surreal` binary is absent, and tests for optional
+  extras auto-skip when the extra is not installed.
 - **Live** (`pytest tests/live -m live`): 5 end-to-end platform tests
   (llmops, cost, bench, graph, multimodal) over real Ollama + SurrealDB +
   CLIP. Auto-skipped unless `http://localhost:11434` is reachable.

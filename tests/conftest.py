@@ -28,7 +28,7 @@ def _ollama_up(base: str = "http://localhost:11434") -> bool:
 def postgres_dsn() -> str | None:
     """DSN of a reachable local test Postgres, or None (live pg tests skip).
 
-    Uses the dedicated ragcore_test database created by host setup (Task 1).
+    Uses the dedicated ragcore_test database created during host setup.
     """
     dsn = "postgresql://localhost/ragcore_test"
     try:

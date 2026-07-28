@@ -6,9 +6,9 @@ embedded, hybrid-searchable, citable (the VLM-caption precedent). mlx-whisper
 runs Whisper natively on Apple-Silicon Metal via MLX.
 
 Timestamps: segment starts can be inlined as ``[mm:ss]`` markers (config
-``timestamps=true``) so they survive as searchable text. (The spec's
-"timestamps in chunk metadata" is realized as inline markers — the chunk
-store carries no metadata column; noted deviation, same honest capability.)
+``timestamps=true``) so they survive as searchable text. (The originally
+planned "timestamps in chunk metadata" is realized as inline markers — the
+chunk store carries no metadata column; noted deviation, same honest capability.)
 """
 from __future__ import annotations
 

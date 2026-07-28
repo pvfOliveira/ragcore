@@ -1,4 +1,4 @@
-"""LIVE: Wave-6 eval evidence on this host.
+"""LIVE: eval evidence on this host.
 
 1. The real ``run_eval`` machinery over golden v1 (10 provenance-noted items
    citing tests/live/fixtures/grid_storage.md) with the real Ollama
@@ -8,7 +8,7 @@
 2. A real sampled chat turn (``chat_turn`` over Ollama + SurrealDB sessions)
    scored through ``online.maybe_score_turn`` — the "evals in prod" path,
    where prod is honestly ragcore's live local chat — RunRegistry tag
-   ``online-eval-v4``. Span export is covered deterministically in Task 13;
+   ``online-eval-v4``. Span export is covered by the deterministic suite;
    observability stays default-off here so the test proves the score, not
    Phoenix connectivity.
 """

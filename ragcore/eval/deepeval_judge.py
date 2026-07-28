@@ -3,7 +3,7 @@ protocol. Judge LLM is the local Ollama model (via litellm), so this runs fully
 local. Heavy imports happen in __init__ to stay out of the offline path. DeepEval
 populates only the ragas metric family; trulens metric names return 0.0.
 
-Verified live against deepeval 4.0.5 (Task 8): the local-Ollama judge is
+Verified live against deepeval 4.0.5: the local-Ollama judge is
 ``deepeval.models.LiteLLMModel`` fed the litellm id ``ollama/<model>`` plus the
 Ollama ``base_url``; ``ContextualPrecisionMetric`` is the real contextual-precision
 class. ``LiteLLMModel`` reuses the litellm stack the harness already depends on, so

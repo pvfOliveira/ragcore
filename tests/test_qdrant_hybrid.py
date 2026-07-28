@@ -4,7 +4,7 @@ Hybrid OFF (default) must be byte-identical to the v3 dense-only adapter:
 unnamed vector schema, plain query_points. Hybrid ON builds named
 dense+sparse vectors and a server-side RRF fusion query.
 
-HONEST DISTINCTION (spec §3 wave 3): this is learned-sparse (BM42/SPLADE via
+HONEST DISTINCTION: this is learned-sparse (BM42/SPLADE via
 fastembed) + dense fused INSIDE Qdrant — distinct from retrieve.py's
 client-side RRF over SurrealDB BM25 full-text.
 """

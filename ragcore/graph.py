@@ -178,7 +178,7 @@ class GraphStore:
     async def neighbors(self, name: str, hops: int = 1) -> list[dict]:
         """Return entities reachable from the entity with this name via ->relates->entity.
 
-        hops=1 returns direct neighbors. Used in Task 9 retrieval and tests.
+        hops=1 returns direct neighbors. Used in graph-RAG retrieval and tests.
         """
         if hops < 1:
             raise ValueError(f"hops must be >= 1, got {hops}")

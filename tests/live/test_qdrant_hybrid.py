@@ -4,7 +4,7 @@ The fixture plants a rare exact token ("ZX-9943-K") inside a chunk whose
 prose is semantically bland, among distractor chunks that are semantically
 CLOSE to the query wording — dense alone struggles to rank the target top-1;
 the sparse (BM42) signal locks onto the rare token. Fusion is server-side
-``FusionQuery(RRF)`` inside Qdrant (Task 6, commit 40a242e). First run
+``FusionQuery(RRF)`` inside Qdrant. First run
 downloads the fastembed sparse model (network gate). Records RunRegistry
 tag hybrid-v4.
 

@@ -9,7 +9,7 @@ def build_report(agg: dict, rates: dict, bench) -> dict:
         agg: Output of ``CostLedger.aggregate()``.
         rates: Mapping of ``"provider:model"`` -> USD per 1 000 tokens.
                Keys absent from this dict are treated as zero-cost (local models).
-        bench: Optional bench report dict (from Task 7). When provided, a compact
+        bench: Optional bench report dict (from the serving bench). When provided, a compact
                ``bench_summary`` is included. ``None`` is safe.
     """
     totals = agg["totals"]
