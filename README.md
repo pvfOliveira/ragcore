@@ -3,13 +3,17 @@
 [![ci](https://github.com/pvfOliveira/ragcore/actions/workflows/ci.yml/badge.svg)](https://github.com/pvfOliveira/ragcore/actions/workflows/ci.yml)
 
 Local-first RAG core. Ingest documents/URLs, ask questions answered by a local
-LLM over hybrid (vector + full-text) retrieval, with cloud escalation when needed.
+LLM over hybrid (vector + full-text) retrieval, with cloud escalation when
+needed. Everything beyond that core — alternative vector backends, reranking,
+evaluation, an LLMOps lifecycle, cost tracking, graph/multimodal/audio
+retrieval — is opt-in: a `config.toml` switch plus a pip extra. The default
+ingest/ask path stays byte-identical until you flip one.
 
-> **Start here for the design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — a
+> **Start with the design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — a
 > full walkthrough of the architecture, the retrieval pipeline, every opt-in
 > layer, and the trade-offs behind them, with `file:line` citations into the code.
 
-## Setup
+## Quickstart
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # or use uv
@@ -27,8 +31,6 @@ ollama pull nomic-embed-text
 surreal start --user root --pass root rocksdb:./data/db
 ```
 
-## Use
-
 ```bash
 ragcore init                              # create the SurrealDB schema
 ragcore ingest path/to/document.pdf       # a file or URL (skips if already ingested)
@@ -40,12 +42,14 @@ ragcore models                            # show configured model roles
 ```
 
 Re-ingesting the same path/URL is a no-op (dedup by origin) — `remove` it first if
-you want to re-index updated content.
+you want to re-index updated content. The full CLI menu (async ingestion via
+`worker`/`jobs`, multi-turn `chat`, DSPy `optimize`, …) is in
+[docs/ARCHITECTURE.md §8](docs/ARCHITECTURE.md).
 
-## Worked example
+### Worked example
 
-With SurrealDB running and Ollama serving (see Setup), ingest the bundled sample
-and ask a question about it:
+With SurrealDB running and Ollama serving (see Quickstart), ingest the bundled
+sample and ask a question about it:
 
 ```console
 $ ragcore init
@@ -72,11 +76,32 @@ The answer is grounded in the ingested document and cites its sources — fully
 local, no cloud call. Use `ragcore ask --cloud "..."` to force cloud escalation
 (requires a `cloud_model` in `config.toml` and the provider's API key).
 
-## Production RAG upgrade
+## Capabilities at a glance
 
-Optional, config-selectable upgrades layered on the default SurrealDB hybrid
-retrieval. Install the whole bundle with `pip install -e ".[rag-upgrade]"`, or
-pick individual extras as shown below.
+Grouped by function; each row links to its section below. All of it is
+disabled by default and enabled independently in `config.toml`.
+
+| Function | Capabilities |
+| --- | --- |
+| [Retrieval & ingestion](#retrieval--ingestion) | hybrid vector+BM25+RRF core; seven vector backends (SurrealDB default, Chroma, FAISS, Milvus, Qdrant, pgvector, Weaviate Embedded); Qdrant BM42 sparse+dense hybrid; FlashRank reranking; query rewriting (multi-query / HyDE / decompose); agentic retrieval loop; graph-RAG; LLMLingua-2 context compression; Docling/PyMuPDF document parsing + VLM captions; mlx-whisper audio ingest; CLIP image ingest + cross-modal search |
+| [Evaluation](#evaluation) | Ragas + TruLens metrics judged by a local Ollama model; versioned golden dataset; online eval of live chat turns exported as OTel spans to Phoenix |
+| [Platform & serving](#platform--serving) | LLMOps lifecycle (eval → gate → promote → rollback, plus drift); structured generation (Instructor / Outlines); Ollama serving benchmark on MPS; local web chat UI |
+| [Cost & observability](#cost--observability) | per-request token ledger + `ragcore cost report`; semantic answer cache; prompt-compression cost evidence; OTel-GenAI tracing to Phoenix |
+
+Install everything optional in one shot with `pip install -e ".[rag-upgrade]"`
+(it pulls the `rerank`, `chroma`, `faiss`, `milvus`, `qdrant`, `eval`,
+`multimodal`, `observability`, `gateway`, `dspy`, `structured`, `docai`,
+`pgvector`, `weaviate`, `hybrid`, `compress` and `audio` extras), or pick
+individual extras as shown per capability below. The
+[capability verification table](#capability-verification) at the end maps
+capabilities to their `file:line` artifacts and how each was verified.
+
+## Retrieval & ingestion
+
+The default path chunks and embeds ingested content into SurrealDB, then
+retrieves with a vector cosine search and a BM25 full-text search fused by
+Reciprocal Rank Fusion. Everything below is an optional, config-selectable
+layer on top.
 
 ### Swappable vector backends
 
@@ -86,7 +111,7 @@ backends receive a mirrored write on ingest.
 
 ```toml
 [store]
-vector_backend = "chroma"     # surreal (default) | chroma | faiss | milvus
+vector_backend = "chroma"     # surreal (default) | chroma | faiss | milvus | qdrant | pgvector | weaviate
 chroma_path    = "data/chroma"
 faiss_path     = "data/faiss"
 milvus_uri     = "data/milvus.db"
@@ -95,6 +120,74 @@ collection     = "ragcore"
 
 ```bash
 pip install -e ".[chroma]"    # or ".[faiss]" / ".[milvus]"
+```
+
+**Qdrant** runs in-process (no server required):
+
+```toml
+[store]
+vector_backend = "qdrant"
+qdrant_path    = "data/qdrant"
+```
+
+```bash
+uv pip install -e '.[qdrant]'
+```
+
+**pgvector** is PostgreSQL with the pgvector extension, via a thin psycopg
+adapter. Three-line host setup:
+
+```bash
+brew install pgvector postgresql@17
+brew services start postgresql@17
+createdb ragcore && psql ragcore -c "CREATE EXTENSION vector"
+```
+
+```toml
+[store]
+vector_backend = "pgvector"
+pgvector_dsn   = "postgresql://localhost/ragcore"
+```
+
+```bash
+uv pip install -e '.[pgvector]'
+```
+
+> **Weaviate holdout:** ~~Weaviate requires a running Docker daemon and is a
+> documented design holdout~~ — superseded in RAG v4: Weaviate Embedded runs
+> as a local binary, no Docker (see below).
+
+**Weaviate Embedded** supersedes that earlier holdout: the "needs Docker" claim
+was outdated — Weaviate Embedded ships a Darwin binary that the client
+downloads and runs in-process, no Docker daemon involved.
+
+```toml
+[store]
+vector_backend   = "weaviate"
+weaviate_path    = "data/weaviate"
+weaviate_version = "1.30.5"   # embedded server binary pin
+```
+
+```bash
+uv pip install -e '.[weaviate]'
+```
+
+### Hybrid sparse+dense retrieval (Qdrant)
+
+BM42 learned-sparse vectors (via fastembed) stored alongside dense vectors as
+named vectors in one Qdrant collection, fused server-side with RRF inside
+Qdrant. Distinct from the default SurrealDB path, which fuses BM25 and dense
+results client-side.
+
+```toml
+[store]
+vector_backend     = "qdrant"
+qdrant_hybrid      = true
+qdrant_sparse_model = "Qdrant/bm42-all-minilm-l6-v2-attentions"
+```
+
+```bash
+uv pip install -e '.[hybrid]'
 ```
 
 ### Reranking (FlashRank)
@@ -111,216 +204,6 @@ top_k   = 5
 ```bash
 pip install -e ".[rerank]"
 ```
-
-### Semantic caching
-
-A local sqlite cache keyed by query embedding; a near-duplicate query within
-`threshold` cosine similarity reuses the prior answer:
-
-```toml
-[cache]
-enabled   = true
-threshold = 0.95
-```
-
-### Evaluation (`ragcore eval`)
-
-Retrieval+answer quality scored with **Ragas** (faithfulness, answer_relevancy,
-context_precision) and **TruLens** (groundedness, context_relevance,
-answer_relevance), judged by a **local Ollama** model via litellm — no cloud
-keys. The judge model is `[eval] judge_model` (default `ollama:qwen3:8b`; a
-non-reasoning instruct model such as `ollama:qwen2.5:7b-instruct` is much faster
-per metric).
-
-```bash
-pip install -e ".[eval]"
-surreal start --user root --pass root rocksdb:./data/db   # in another terminal
-ragcore ingest examples/ragcore_demo.md
-ragcore eval                                              # writes data/eval/report.json
-```
-
-### Test tiers
-
-- **Deterministic** (`pytest tests`): the full suite with stubbed judges and
-  fixed vectors; no Ollama required. SurrealDB-backed tests auto-skip if the
-  `surreal` binary is absent.
-- **Live** (`pytest tests/live -m live`): exercises the real Ollama path —
-  pluggable backends with real `nomic-embed-text` embeddings and the real
-  Ragas+TruLens judge. Auto-skipped unless `http://localhost:11434` is reachable
-  (gate in `tests/conftest.py`).
-
-### Skills demonstrated
-
-`file:line` artifacts for each capability. Live-verified entries were exercised
-against a local Ollama (qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by the
-`tests/live` tier; structural-only entries are covered by the deterministic suite.
-
-| Skill | Artifact | Verification |
-| --- | --- | --- |
-| Chroma backend | `ragcore/vectorstores/chroma_store.py:10` (`ChromaStore`); factory `ragcore/vectorstores/base.py:63` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:75` |
-| FAISS backend | `ragcore/vectorstores/faiss_store.py:18` (`FaissStore`); factory `ragcore/vectorstores/base.py:72` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:79` |
-| Milvus backend | `ragcore/vectorstores/milvus_store.py:20` (`MilvusStore`); factory `ragcore/vectorstores/base.py:77` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:83` |
-| Reranking (FlashRank) | `ragcore/rerank.py:7` (`rerank`); config `ragcore/config.py:57` | Structural — `tests/test_rerank.py` |
-| Semantic caching | `ragcore/cache.py:22` (`SemanticCache`); config `ragcore/config.py:63` | Structural — `tests/test_cache.py` |
-| Model evaluation | `ragcore/eval/harness.py:45` (`compute_metrics`); CLI `ragcore/cli.py:278` | Live — full 6-metric report from the local Ollama judge, all floats in [0,1] (`tests/live/test_live_rag_upgrade.py:88`, passing) |
-| Ragas | `ragcore/eval/harness.py:161` (`_score_ragas`) | Live (qwen2.5:7b-instruct) — faithfulness=1.0, answer_relevancy≈0.85, context_precision≈0.50 on a grounded record |
-| TruLens | `ragcore/eval/harness.py:173` (`_score_trulens`); litellm shim `ragcore/eval/harness.py:62` | Live (qwen2.5:7b-instruct) — groundedness=1.0, context_relevance=0.5, answer_relevance=1.0 on a grounded record |
-
-> Live-eval notes: first real exercise of the `judge=None` path
-> surfaced three fixable mismatches, all fixed in `ragcore/eval/harness.py`:
-> (1) trulens-vs-litellm instrumentation crash on `litellm.CallTypes`
-> (`_patch_trulens_litellm_instrumentation`); (2) Ollama rejecting ragas'
-> `n`-sampling param (`litellm.drop_params = True`); (3) `answer_relevancy`
-> needing an embeddings model (wired from `[models.embedding]`). The
-> per-metric `LLM` judge calls are slow under a reasoning model (qwen3:8b);
-> use a non-reasoning instruct model for `ragcore eval`. The end-to-end
-> `ragcore eval` (which also runs the LangGraph answer step) can hit esperanto's
-> default Ollama HTTP read-timeout under qwen3:8b — independent of the metrics,
-> which are verified above.
-
-## LLM platform
-
-Optional capabilities installed with `pip install -e ".[platform]"` (or the
-individual extras below). All are opt-in via `config.toml` and do not affect
-the default ingest/ask/eval paths unless explicitly enabled.
-
-### LLMOps lifecycle
-
-An `eval_run` registry (SurrealDB) records every evaluation with its metrics,
-config snapshot, and an optional tag. A `deployment:current` pointer tracks
-which run is live, and a history list supports one-level rollback.
-
-```toml
-[llmops]
-tolerance       = 0.05   # max allowed metric regression vs baseline
-drift_threshold = 0.15   # cosine-distance drift that fails `drift`
-```
-
-```bash
-ragcore eval --tag v2            # run eval and record a named run
-ragcore runs                     # list all recorded eval runs
-ragcore gate  --baseline v1      # exit nonzero if any metric regressed vs baseline
-ragcore drift --baseline v1      # report embedding centroid drift vs baseline
-ragcore promote <run-id>         # set deployment:current (gate required unless --no-gate)
-ragcore rollback                 # revert deployment:current to the previous run
-```
-
-### Cost optimization
-
-Per-request token accounting at the LLM call boundary, recorded in a
-local SQLite ledger. `ragcore cost report` aggregates spend by model,
-cache hit-rate and tokens avoided, plus right-sizing hints.
-
-```toml
-[cost]
-enabled       = false    # record usage into the ledger
-enforce       = false    # block requests over budget (else warn only)
-budget_tokens = 0        # 0 = no budget
-ledger_path   = "data/cost.db"
-
-[cost.rates]
-"anthropic:claude-3-5-sonnet-20241022" = 3.0   # USD per 1k tokens (local = omit)
-```
-
-```bash
-ragcore cost report              # spend by model, cache hit-rate, right-sizing hints
-```
-
-### Serving benchmark (inference-optimization)
-
-Sweeps the cartesian product of `num_ctx × num_batch × concurrency` against a
-local Ollama server on MPS, reporting latency (TTFT + total) and aggregate
-throughput.
-
-```toml
-[bench]
-num_ctx     = [2048, 4096]
-num_batch   = [128, 256]
-concurrency = [1, 2, 4]
-keep_alive  = "5m"
-prompt      = "Summarize the theory of relativity in three sentences."
-```
-
-```bash
-ragcore bench                    # sweep and print latency/throughput report
-```
-
-> **GPU/vLLM holdout:** production inference-optimization (continuous batching,
-> paged KV-cache, AWQ/GPTQ quantization via vLLM or TGI) requires CUDA and is
-> a documented design-only holdout on this MPS host.
-> `ragcore/bench/serving.py::vllm_serve` raises at runtime when `nvidia-smi`
-> is absent. The MPS Ollama bench (`ragcore bench`) is the runnable artifact
-> on this machine.
-
-### Graph-RAG
-
-LLM triple extraction at ingest time populates a SurrealDB entity/relation
-graph. At query time, entities mentioned in the query seed a graph traversal
-and the connected chunks are injected as a third RRF signal alongside vector
-and BM25 results.
-
-```toml
-[graph]
-enabled = false   # enable graph-RAG traversal at query time
-hops    = 1       # traversal depth
-```
-
-```bash
-ragcore graph build              # back-fill the graph for already-ingested sources
-```
-
-Enable `[graph] enabled = true` before ingesting to extract triples
-automatically; or run `ragcore graph build` to back-fill an existing corpus.
-
-### Multimodal (CLIP)
-
-CLIP-embeds images at ingest time and stores them in a `image_embedding`
-SurrealDB table. `ragcore search --images` runs a cross-modal text→image query
-using a SurrealDB-side cosine function.
-
-```bash
-pip install -e ".[multimodal]"   # adds open_clip, torch, Pillow
-
-ragcore ingest photo.png         # CLIP-embed an image and store it
-ragcore search --images "a red sunset"   # cross-modal text → image retrieval
-```
-
-Configure the CLIP model and device in `config.toml`:
-
-```toml
-[multimodal]
-model      = "ViT-B-32"
-pretrained = "laion2b_s34b_b79k"
-device     = "mps"   # mps | cuda | cpu
-```
-
-### Test tiers (platform)
-
-- **Deterministic** (`pytest tests`): 256 tests — stubs all LLM calls and
-  SurrealDB interactions; no Ollama required. SurrealDB-backed tests
-  auto-skip if the `surreal` binary is absent, and tests for optional
-  extras auto-skip when the extra is not installed.
-- **Live** (`pytest tests/live -m live`): 5 end-to-end platform tests
-  (llmops, cost, bench, graph, multimodal) over real Ollama + SurrealDB +
-  CLIP. Auto-skipped unless `http://localhost:11434` is reachable.
-
-### Skills demonstrated
-
-`file:line` artifacts for the platform layer. Each `file:line` was verified
-by reading the file.
-
-| Skill | Artifact | Status |
-| --- | --- | --- |
-| llmops | `ragcore/llmops/registry.py:27` (`RunRegistry.record`); `ragcore/llmops/gates.py:19` (`check_gate`), `ragcore/llmops/gates.py:44` (`check_drift`); `ragcore/llmops/deploy.py:43` (`DeploymentStore.promote`) | proven (deterministic + live) |
-| ai-cost-optimization | `ragcore/cost/ledger.py:7` (`CostLedger`); `ragcore/cost/report.py:5` (`build_report`) | proven (deterministic + live) |
-| graph-rag | `ragcore/graph.py:33` (`extract_triples`), `ragcore/graph.py:89` (`GraphStore`), `ragcore/graph.py:273` (`graph_context`); `ragcore/retrieve.py:29` (`fuse_with_graph`) | proven (deterministic + live) |
-| multimodal-ai | `ragcore/multimodal.py:58` (`ClipEmbedder`), `ragcore/multimodal.py:33` (`cross_modal_rank`), `ragcore/multimodal.py:154` (`ImageStore`) | proven (deterministic + live) |
-| inference-optimization | `ragcore/bench/harness.py:30` (`run_bench`); `ragcore/bench/serving.py:39` (`vllm_serve` — CUDA-gated design stub) | MPS bench proven; GPU serving aspirational (holdout) |
-
-## RAG v3 (opt-in)
-
-Five advanced retrieval capabilities, all disabled by default. Enable each
-independently in `config.toml`; the default ingest/ask paths are unchanged.
 
 ### Query rewriting
 
@@ -353,45 +236,44 @@ max_iterations = 2
 min_relevant   = 2
 ```
 
-### Structured generation
+### Graph-RAG
 
-Forces the LLM to return a validated Pydantic schema via **Instructor** (JSON
-mode) or **Outlines** (constrained token sampling). Activated with the
-`--structured` flag:
-
-```bash
-ragcore ask --structured "Summarise the key findings"
-```
+LLM triple extraction at ingest time populates a SurrealDB entity/relation
+graph. At query time, entities mentioned in the query seed a graph traversal
+and the connected chunks are injected as a third RRF signal alongside vector
+and BM25 results.
 
 ```toml
-[structured]
+[graph]
+enabled = false   # enable graph-RAG traversal at query time
+hops    = 1       # traversal depth
+```
+
+```bash
+ragcore graph build              # back-fill the graph for already-ingested sources
+```
+
+Enable `[graph] enabled = true` before ingesting to extract triples
+automatically; or run `ragcore graph build` to back-fill an existing corpus.
+
+### Context compression (LLMLingua-2)
+
+Compresses retrieved chunks before they enter the prompt using the
+LLMLingua-2 token-classification encoder (local, CPU/MPS, query-agnostic).
+One implementation, two honest claims: RAG-side context compression and
+cost-side prompt compression — the measured keep ratio (0.526 live at
+`rate = 0.5`) is the cost evidence.
+
+```toml
+[compression]
 enabled = true
-backend = "instructor"   # instructor | outlines
+rate    = 0.5   # target token-keep ratio
+device  = "cpu" # cpu | mps
 ```
 
 ```bash
-uv pip install -e '.[structured]'   # pulls instructor + outlines
+uv pip install -e '.[compress]'
 ```
-
-### Qdrant vector backend
-
-In-process Qdrant (no server required) as an alternative to the default
-SurrealDB vector index. All existing backends (chroma, faiss, milvus) remain
-available.
-
-```toml
-[store]
-vector_backend = "qdrant"
-qdrant_path    = "data/qdrant"
-```
-
-```bash
-uv pip install -e '.[qdrant]'
-```
-
-> **Weaviate holdout:** ~~Weaviate requires a running Docker daemon and is a
-> documented design holdout~~ — superseded in RAG v4: Weaviate Embedded runs
-> as a local binary, no Docker (see below).
 
 ### Document AI / OCR + VLM captions
 
@@ -414,86 +296,6 @@ uv pip install -e '.[docai,structured]'
 ollama pull moondream
 ```
 
-## RAG v4 (opt-in)
-
-Six further capabilities, all config-gated and disabled by default — the
-stock ingest/ask paths are byte-identical until you flip a switch.
-
-### pgvector backend
-
-PostgreSQL with the pgvector extension as a vector backend, via a thin
-psycopg adapter. Three-line host setup:
-
-```bash
-brew install pgvector postgresql@17
-brew services start postgresql@17
-createdb ragcore && psql ragcore -c "CREATE EXTENSION vector"
-```
-
-```toml
-[store]
-vector_backend = "pgvector"
-pgvector_dsn   = "postgresql://localhost/ragcore"
-```
-
-```bash
-uv pip install -e '.[pgvector]'
-```
-
-### Weaviate Embedded backend
-
-Supersedes the v3 holdout: the "needs Docker" claim was outdated — Weaviate
-Embedded ships a Darwin binary that the client downloads and runs in-process,
-no Docker daemon involved.
-
-```toml
-[store]
-vector_backend   = "weaviate"
-weaviate_path    = "data/weaviate"
-weaviate_version = "1.30.5"   # embedded server binary pin
-```
-
-```bash
-uv pip install -e '.[weaviate]'
-```
-
-### Hybrid sparse+dense retrieval (Qdrant)
-
-BM42 learned-sparse vectors (via fastembed) stored alongside dense vectors as
-named vectors in one Qdrant collection, fused server-side with RRF inside
-Qdrant. Distinct from the default SurrealDB path, which fuses BM25 and dense
-results client-side.
-
-```toml
-[store]
-vector_backend     = "qdrant"
-qdrant_hybrid      = true
-qdrant_sparse_model = "Qdrant/bm42-all-minilm-l6-v2-attentions"
-```
-
-```bash
-uv pip install -e '.[hybrid]'
-```
-
-### Context compression (LLMLingua-2)
-
-Compresses retrieved chunks before they enter the prompt using the
-LLMLingua-2 token-classification encoder (local, CPU/MPS, query-agnostic).
-One implementation, two honest claims: RAG-side context compression and
-cost-side prompt compression — the measured keep ratio (0.526 live at
-`rate = 0.5`) is the cost evidence.
-
-```toml
-[compression]
-enabled = true
-rate    = 0.5   # target token-keep ratio
-device  = "cpu" # cpu | mps
-```
-
-```bash
-uv pip install -e '.[compress]'
-```
-
 ### Audio ingest (mlx-whisper)
 
 `ragcore ingest meeting.m4a` transcribes audio with mlx-whisper (Whisper on
@@ -512,9 +314,61 @@ timestamps = false
 uv pip install -e '.[audio]'
 ```
 
+### Multimodal (CLIP)
+
+CLIP-embeds images at ingest time and stores them in a `image_embedding`
+SurrealDB table. `ragcore search --images` runs a cross-modal text→image query
+using a SurrealDB-side cosine function.
+
+```bash
+pip install -e ".[multimodal]"   # adds open_clip, torch, Pillow
+
+ragcore ingest photo.png         # CLIP-embed an image and store it
+ragcore search --images "a red sunset"   # cross-modal text → image retrieval
+```
+
+Configure the CLIP model and device in `config.toml`:
+
+```toml
+[multimodal]
+model      = "ViT-B-32"
+pretrained = "laion2b_s34b_b79k"
+device     = "mps"   # mps | cuda | cpu
+```
+
+## Evaluation
+
+### Offline evaluation (`ragcore eval`)
+
+Retrieval+answer quality scored with **Ragas** (faithfulness, answer_relevancy,
+context_precision) and **TruLens** (groundedness, context_relevance,
+answer_relevance), judged by a **local Ollama** model via litellm — no cloud
+keys. The judge model is `[eval] judge_model` (default `ollama:qwen3:8b`; a
+non-reasoning instruct model such as `ollama:qwen2.5:7b-instruct` is much faster
+per metric).
+
+```bash
+pip install -e ".[eval]"
+surreal start --user root --pass root rocksdb:./data/db   # in another terminal
+ragcore ingest examples/ragcore_demo.md
+ragcore eval                                              # writes data/eval/report.json
+```
+
+> Live-eval notes: first real exercise of the `judge=None` path
+> surfaced three fixable mismatches, all fixed in `ragcore/eval/harness.py`:
+> (1) trulens-vs-litellm instrumentation crash on `litellm.CallTypes`
+> (`_patch_trulens_litellm_instrumentation`); (2) Ollama rejecting ragas'
+> `n`-sampling param (`litellm.drop_params = True`); (3) `answer_relevancy`
+> needing an embeddings model (wired from `[models.embedding]`). The
+> per-metric `LLM` judge calls are slow under a reasoning model (qwen3:8b);
+> use a non-reasoning instruct model for `ragcore eval`. The end-to-end
+> `ragcore eval` (which also runs the LangGraph answer step) can hit esperanto's
+> default Ollama HTTP read-timeout under qwen3:8b — independent of the metrics,
+> which are verified above.
+
 ### Golden eval datasets + online eval
 
-`ragcore eval`/`gate` now consume a versioned, provenance-noted golden
+`ragcore eval`/`gate` consume a versioned, provenance-noted golden
 dataset (`ragcore/eval/golden/v1.jsonl`, 10 items; `MANIFEST.md` records the
 corpus, sources and the failure mode each item probes). Online eval samples
 live chat turns — "prod" here is the local chat path — and scores them
@@ -528,10 +382,80 @@ sample_rate = 0.1
 metrics     = ["groundedness"]
 ```
 
-The `rag-upgrade` meta-extra now pulls all five new extras
-(`pgvector,weaviate,hybrid,compress,audio`) alongside the v2/v3 set.
+## Platform & serving
 
-## Web UI
+These capabilities run on the core dependencies except where an extra is
+noted. All are opt-in via `config.toml` and do not affect the default
+ingest/ask/eval paths unless explicitly enabled.
+
+### LLMOps lifecycle
+
+An `eval_run` registry (SurrealDB) records every evaluation with its metrics,
+config snapshot, and an optional tag. A `deployment:current` pointer tracks
+which run is live, and a history list supports one-level rollback.
+
+```toml
+[llmops]
+tolerance       = 0.05   # max allowed metric regression vs baseline
+drift_threshold = 0.15   # cosine-distance drift that fails `drift`
+```
+
+```bash
+ragcore eval --tag v2            # run eval and record a named run
+ragcore runs                     # list all recorded eval runs
+ragcore gate  --baseline v1      # exit nonzero if any metric regressed vs baseline
+ragcore drift --baseline v1      # report embedding centroid drift vs baseline
+ragcore promote <run-id>         # set deployment:current (gate required unless --no-gate)
+ragcore rollback                 # revert deployment:current to the previous run
+```
+
+### Structured generation
+
+Forces the LLM to return a validated Pydantic schema via **Instructor** (JSON
+mode) or **Outlines** (constrained token sampling). Activated with the
+`--structured` flag:
+
+```bash
+ragcore ask --structured "Summarise the key findings"
+```
+
+```toml
+[structured]
+enabled = true
+backend = "instructor"   # instructor | outlines
+```
+
+```bash
+uv pip install -e '.[structured]'   # pulls instructor + outlines
+```
+
+### Serving benchmark (inference-optimization)
+
+Sweeps the cartesian product of `num_ctx × num_batch × concurrency` against a
+local Ollama server on MPS, reporting latency (TTFT + total) and aggregate
+throughput.
+
+```toml
+[bench]
+num_ctx     = [2048, 4096]
+num_batch   = [128, 256]
+concurrency = [1, 2, 4]
+keep_alive  = "5m"
+prompt      = "Summarize the theory of relativity in three sentences."
+```
+
+```bash
+ragcore bench                    # sweep and print latency/throughput report
+```
+
+> **GPU/vLLM holdout:** production inference-optimization (continuous batching,
+> paged KV-cache, AWQ/GPTQ quantization via vLLM or TGI) requires CUDA and is
+> a documented design-only holdout on this MPS host.
+> `ragcore/bench/serving.py::vllm_serve` raises at runtime when `nvidia-smi`
+> is absent. The MPS Ollama bench (`ragcore bench`) is the runnable artifact
+> on this machine.
+
+### Web UI
 
 A thin local chat UI (FastAPI + one HTML page, no build step):
 
@@ -542,3 +466,85 @@ ragcore serve            # http://127.0.0.1:8080  (localhost only, no auth)
 
 Open the URL: add sources (URL/path) in the sidebar, start a chat, switch sessions.
 It is unauthenticated and bound to localhost — do not expose it to a network as-is.
+
+## Cost & observability
+
+### Cost tracking
+
+Per-request token accounting at the LLM call boundary, recorded in a
+local SQLite ledger. `ragcore cost report` aggregates spend by model,
+cache hit-rate and tokens avoided, plus right-sizing hints.
+
+```toml
+[cost]
+enabled       = false    # record usage into the ledger
+enforce       = false    # block requests over budget (else warn only)
+budget_tokens = 0        # 0 = no budget
+ledger_path   = "data/cost.db"
+
+[cost.rates]
+"anthropic:claude-3-5-sonnet-20241022" = 3.0   # USD per 1k tokens (local = omit)
+```
+
+```bash
+ragcore cost report              # spend by model, cache hit-rate, right-sizing hints
+```
+
+### Semantic caching
+
+A local sqlite cache keyed by query embedding; a near-duplicate query within
+`threshold` cosine similarity reuses the prior answer:
+
+```toml
+[cache]
+enabled   = true
+threshold = 0.95
+```
+
+### Related evidence & tracing
+
+- The cost-side prompt-compression evidence (measured keep ratio 0.526 live at
+  `rate = 0.5`) lives with its implementation under
+  [Context compression (LLMLingua-2)](#context-compression-llmlingua-2).
+- Online-eval scores land on OTel spans exported to Phoenix — see
+  [Golden eval datasets + online eval](#golden-eval-datasets--online-eval).
+- In-process OTel-GenAI tracing to Arize Phoenix ships behind the
+  `observability` extra; the wiring (and the litellm `gateway` and DSPy
+  `optimize` layers) is documented in
+  [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Capability verification
+
+`file:line` artifacts for each capability; each `file:line` was verified by
+reading the file. Live entries were exercised against a local Ollama
+(qwen3:8b / qwen2.5:7b-instruct + nomic-embed-text) by the `tests/live` tier;
+structural-only entries are covered by the deterministic suite.
+
+| Capability | Artifact | Verification |
+| --- | --- | --- |
+| Chroma backend | `ragcore/vectorstores/chroma_store.py:10` (`ChromaStore`); factory `ragcore/vectorstores/base.py:63` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:75` |
+| FAISS backend | `ragcore/vectorstores/faiss_store.py:18` (`FaissStore`); factory `ragcore/vectorstores/base.py:72` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:79` |
+| Milvus backend | `ragcore/vectorstores/milvus_store.py:20` (`MilvusStore`); factory `ragcore/vectorstores/base.py:77` | Live — real-embedding roundtrip, `tests/live/test_live_rag_upgrade.py:83` |
+| Reranking (FlashRank) | `ragcore/rerank.py:7` (`rerank`); config `ragcore/config.py:57` | Structural — `tests/test_rerank.py` |
+| Semantic caching | `ragcore/cache.py:22` (`SemanticCache`); config `ragcore/config.py:63` | Structural — `tests/test_cache.py` |
+| Model evaluation | `ragcore/eval/harness.py:45` (`compute_metrics`); CLI `ragcore/cli.py:278` | Live — full 6-metric report from the local Ollama judge, all floats in [0,1] (`tests/live/test_live_rag_upgrade.py:88`, passing) |
+| Ragas | `ragcore/eval/harness.py:161` (`_score_ragas`) | Live (qwen2.5:7b-instruct) — faithfulness=1.0, answer_relevancy≈0.85, context_precision≈0.50 on a grounded record |
+| TruLens | `ragcore/eval/harness.py:173` (`_score_trulens`); litellm shim `ragcore/eval/harness.py:62` | Live (qwen2.5:7b-instruct) — groundedness=1.0, context_relevance=0.5, answer_relevance=1.0 on a grounded record |
+| LLMOps lifecycle | `ragcore/llmops/registry.py:27` (`RunRegistry.record`); `ragcore/llmops/gates.py:19` (`check_gate`), `ragcore/llmops/gates.py:44` (`check_drift`); `ragcore/llmops/deploy.py:43` (`DeploymentStore.promote`) | Deterministic + live end-to-end test |
+| Cost tracking | `ragcore/cost/ledger.py:7` (`CostLedger`); `ragcore/cost/report.py:5` (`build_report`) | Deterministic + live end-to-end test |
+| Graph-RAG | `ragcore/graph.py:33` (`extract_triples`), `ragcore/graph.py:89` (`GraphStore`), `ragcore/graph.py:273` (`graph_context`); `ragcore/retrieve.py:29` (`fuse_with_graph`) | Deterministic + live end-to-end test |
+| Multimodal (CLIP) | `ragcore/multimodal.py:58` (`ClipEmbedder`), `ragcore/multimodal.py:33` (`cross_modal_rank`), `ragcore/multimodal.py:154` (`ImageStore`) | Deterministic + live end-to-end test |
+| Serving benchmark | `ragcore/bench/harness.py:30` (`run_bench`); `ragcore/bench/serving.py:39` (`vllm_serve` — CUDA-gated design stub) | MPS bench live-verified; GPU serving is a documented design-only holdout |
+
+## Test tiers
+
+- **Deterministic** (`pytest tests`): 256 tests — the full suite with stubbed
+  judges, fixed vectors, and stubbed LLM/SurrealDB interactions; no Ollama
+  required. SurrealDB-backed tests auto-skip if the `surreal` binary is
+  absent, and tests for optional extras auto-skip when the extra is not
+  installed.
+- **Live** (`pytest tests/live -m live`): exercises the real Ollama path —
+  pluggable backends with real `nomic-embed-text` embeddings, the real
+  Ragas+TruLens judge, and 5 end-to-end platform tests (llmops, cost, bench,
+  graph, multimodal) over real Ollama + SurrealDB + CLIP. Auto-skipped unless
+  `http://localhost:11434` is reachable (gate in `tests/conftest.py`).
