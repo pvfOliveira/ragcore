@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra dev
+      - run: uv run --extra dev ruff check .
+      # Deterministic tier only; the live tier (tests/live) needs a local
+      # Ollama and is opt-in (`pytest tests/live -m live`). The --ignore
+      # mirrors the addopts default in pyproject.toml.
+      - run: uv run --extra dev pytest -q --ignore=tests/live
