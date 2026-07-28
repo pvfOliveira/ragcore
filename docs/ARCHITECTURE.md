@@ -359,7 +359,7 @@ RRF is the glue between all ranking signals: `1 / (k + rank)` summed over lists,
 
 **Cascade deletes in the database, not the application.** `DEFINE EVENT` on `source` and `chat_session` reaps child rows server-side; the app issues one `DELETE` and walks away.
 
-**Honest capability labelling.** Repeatedly the code refuses to overclaim: compression is documented query-agnostic; Qdrant hybrid is explicitly distinguished from client-side BM25 RRF; "prod" in online eval is labelled as the local chat path; pgvectorscale and vLLM/GPU are named as holdouts. This honesty-over-node-count discipline (`structured.py:37`, `pgvector_store.py:7`, `online.py:4`) is the most transferable habit here.
+**Honest capability labelling.** Repeatedly the code refuses to overclaim: compression is documented query-agnostic; Qdrant hybrid is explicitly distinguished from client-side BM25 RRF; "prod" in online eval is labelled as the local chat path; pgvectorscale and vLLM/GPU are named as holdouts. This honesty-over-feature-count discipline (`structured.py:37`, `pgvector_store.py:7`, `online.py:4`) is the most transferable habit here.
 
 ### Clever bits worth stealing
 
