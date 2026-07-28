@@ -2,7 +2,7 @@
 name = "ragcore"
 version = "0.1.0"
 license = "Apache-2.0"
-description = "Local-first RAG core (hybrid of open-notebook's libraries)"
+description = "Local-first RAG core: ingest documents and URLs, answer questions with a local LLM over hybrid vector + full-text retrieval"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "esperanto>=2.20.0,<3",
@@ -67,6 +67,9 @@ compress = ["llmlingua>=0.2,<0.3"]  # 0.2.2 verified; internal API unstable acro
 audio = ["mlx-whisper>=0.4"]
 docai = ["docling>=2.0", "pymupdf4llm>=0.0.17"]
 rag-upgrade = ["ragcore[rerank,chroma,faiss,milvus,qdrant,eval,multimodal,observability,gateway,dspy,structured,docai,pgvector,weaviate,hybrid,compress,audio]"]
+
+[project.urls]
+Repository = "https://github.com/pvfOliveira/ragcore"
 
 [project.scripts]
 ragcore = "ragcore.cli:app"
