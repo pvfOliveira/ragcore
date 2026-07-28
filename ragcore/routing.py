@@ -6,8 +6,8 @@ only if a cloud model is actually configured for that role.
 """
 from __future__ import annotations
 
-from ragcore.config import Config
 from ragcore.chunking import token_count
+from ragcore.config import Config
 from ragcore.errors import ConfigurationError
 
 

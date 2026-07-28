@@ -1,5 +1,9 @@
 from ragcore.errors import (
-    RagcoreError, ConfigurationError, ProviderError, classify_error,
+    ConfigurationError,
+    ProviderError,
+    RagcoreError,
+    classify_error,
+    is_transient,
 )
 
 
@@ -24,9 +28,6 @@ def test_classify_unknown_passthrough():
     exc_class, msg = classify_error(Exception("some weird error"))
     assert exc_class is ProviderError
     assert "some weird error" in msg
-
-
-from ragcore.errors import is_transient
 
 
 def test_is_transient_true_for_network_and_rate_limit():

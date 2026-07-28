@@ -6,8 +6,8 @@ import asyncio
 import copy
 
 import pytest
-
 from pydantic import BaseModel
+
 from ragcore.config import SurrealConfig, load_config
 
 pytestmark = pytest.mark.live

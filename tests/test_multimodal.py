@@ -1,5 +1,6 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from ragcore.multimodal import ClipEmbedder, cross_modal_rank
 
@@ -38,8 +39,8 @@ async def test_ingest_image_caption_uses_real_embedder(tmp_path, monkeypatch):
     the real embedder output (multi-element), never the 1-dim [0.0] placeholder
     that would poison corpus-wide vector_search with a dimension mismatch.
     """
-    import ragcore.multimodal as mm_mod
     import ragcore.docai as docai_mod
+    import ragcore.multimodal as mm_mod
 
     # --- Fake config --------------------------------------------------------
     class _MM:

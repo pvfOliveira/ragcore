@@ -15,8 +15,8 @@ pytestmark = pytest.mark.live
 def test_qdrant_ingest_and_search(surreal_url, tmp_path):
     pytest.importorskip("qdrant_client")
     from ragcore.embedding import generate_embedding
-    from ragcore.vectorstores.qdrant_store import QdrantStore
     from ragcore.llmops.registry import RunRegistry
+    from ragcore.vectorstores.qdrant_store import QdrantStore
 
     cfg = copy.deepcopy(load_config())
     store = QdrantStore(path=str(tmp_path / "qd"), collection="live")

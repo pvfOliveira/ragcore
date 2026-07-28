@@ -1,4 +1,4 @@
-from ragcore.chunking import token_count, chunk_text, detect_content_type, ContentType
+from ragcore.chunking import ContentType, chunk_text, detect_content_type, token_count
 
 
 def test_token_count_nonzero():

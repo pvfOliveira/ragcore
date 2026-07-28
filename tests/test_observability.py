@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_set_gen_ai_attributes_sets_stable_keys():
     from ragcore.observability.otel import set_gen_ai_attributes
 
@@ -34,15 +37,14 @@ def test_set_gen_ai_attributes_omits_none_token_counts():
     assert "gen_ai.usage.output_tokens" not in span.attrs
 
 
-import pytest
-
-
 def _inmemory_tracer():
     """Build a real OTel tracer backed by an in-memory exporter (no Phoenix)."""
     pytest.importorskip("opentelemetry.sdk")
     from opentelemetry.sdk.trace import TracerProvider
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
 
     provider = TracerProvider()
     exporter = InMemorySpanExporter()
@@ -61,8 +63,8 @@ def test_get_tracer_returns_none_when_disabled():
 
 
 def test_traced_span_records_when_enabled_and_noop_when_disabled():
-    from ragcore.observability.spans import traced_span
     from ragcore.observability.otel import set_gen_ai_attributes
+    from ragcore.observability.spans import traced_span
     from ragcore.observability.tracing import _set_provider_for_test
 
     provider, exporter = _inmemory_tracer()
@@ -85,9 +87,14 @@ def test_traced_span_records_when_enabled_and_noop_when_disabled():
 
 def test_ask_emits_root_and_gen_ai_spans(monkeypatch):
     import asyncio
+
     import ragcore.ask as ask
     from ragcore.config import (
-        Config, ModelRole, ObservabilityConfig, CacheConfig, CostConfig,
+        CacheConfig,
+        Config,
+        CostConfig,
+        ModelRole,
+        ObservabilityConfig,
     )
     from ragcore.observability.tracing import _set_provider_for_test
 
@@ -134,8 +141,15 @@ def test_ask_emits_root_and_gen_ai_spans(monkeypatch):
 def test_ask_is_byte_identical_when_observability_disabled(monkeypatch):
     """Disabled tracer must not change the result and must emit no spans."""
     import asyncio
+
     import ragcore.ask as ask
-    from ragcore.config import Config, ModelRole, ObservabilityConfig, CacheConfig, CostConfig
+    from ragcore.config import (
+        CacheConfig,
+        Config,
+        CostConfig,
+        ModelRole,
+        ObservabilityConfig,
+    )
     from ragcore.observability.tracing import _set_provider_for_test
 
     provider, exporter = _inmemory_tracer()

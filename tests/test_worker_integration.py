@@ -8,7 +8,13 @@ binary (the `surreal_url` fixture skips if absent).
 import pytest
 
 from ragcore import worker as worker_mod
-from ragcore.config import ChunkingConfig, Config, ModelRole, SurrealConfig, WorkerConfig
+from ragcore.config import (
+    ChunkingConfig,
+    Config,
+    ModelRole,
+    SurrealConfig,
+    WorkerConfig,
+)
 from ragcore.jobs import JobQueue
 from ragcore.store import Store
 from ragcore.worker import run_worker

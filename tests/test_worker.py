@@ -1,7 +1,12 @@
-import pytest
 
 from ragcore import worker as worker_mod
-from ragcore.config import ChunkingConfig, Config, ModelRole, SurrealConfig, WorkerConfig
+from ragcore.config import (
+    ChunkingConfig,
+    Config,
+    ModelRole,
+    SurrealConfig,
+    WorkerConfig,
+)
 from ragcore.ingest import IngestResult
 from ragcore.worker import run_worker
 

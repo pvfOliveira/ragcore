@@ -1,7 +1,7 @@
 import pytest
 
 from ragcore import embedding as emb_mod
-from ragcore.embedding import generate_embeddings, generate_embedding
+from ragcore.embedding import generate_embedding, generate_embeddings
 
 
 class FakeEmbedder:

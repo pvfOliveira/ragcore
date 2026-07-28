@@ -1,5 +1,6 @@
 import pytest
 from pydantic import BaseModel
+
 from ragcore.config import StructuredConfig
 from ragcore.structured import generate_structured
 

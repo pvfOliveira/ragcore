@@ -12,9 +12,9 @@ pytestmark = pytest.mark.live
 
 
 async def test_multi_query_expansion_over_ollama(surreal_url):
-    from ragcore.ask import _select_and_build, _clean
-    from ragcore.query_rewrite import rewrite_query
+    from ragcore.ask import _clean, _select_and_build
     from ragcore.llmops.registry import RunRegistry
+    from ragcore.query_rewrite import rewrite_query
 
     cfg = copy.deepcopy(load_config())
     cfg.query_rewrite.enabled = True

@@ -10,7 +10,7 @@ def _parse_docling(path: str) -> str:
 
 
 def _parse_pymupdf(path: str) -> str:
-    import pymupdf4llm                                       # lazy — fallback
+    import pymupdf4llm  # lazy — fallback
     return pymupdf4llm.to_markdown(path)
 
 
@@ -40,7 +40,7 @@ def extract_if_document(origin: str, config) -> str | None:
 
 
 def _ollama_caption(model: str, path: str) -> str:
-    import ollama                                           # lazy — uses local Ollama
+    import ollama  # lazy — uses local Ollama
     resp = ollama.chat(model=model, messages=[{
         "role": "user",
         "content": "Describe this image in one concise sentence for search indexing.",

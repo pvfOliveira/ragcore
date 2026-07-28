@@ -30,8 +30,8 @@ def test_deepeval_judge_returns_zero_for_unknown_metric():
 def test_build_judge_for_framework_selects_deepeval(monkeypatch):
     """_build_judge_for_framework dispatches on config.eval.framework: 'deepeval'
     builds DeepEvalJudge, anything else builds the Ollama Ragas/TruLens judge."""
-    import ragcore.eval.harness as harness
     import ragcore.eval.deepeval_judge as de
+    import ragcore.eval.harness as harness
 
     class _Cfg:
         class eval:  # noqa: A003 - mirrors EvalConfig attr access

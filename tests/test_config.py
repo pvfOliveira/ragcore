@@ -1,5 +1,6 @@
 from pathlib import Path
-from ragcore.config import load_config, ChatConfig
+
+from ragcore.config import load_config
 
 
 def test_load_config(tmp_path: Path):
